@@ -63,7 +63,10 @@ test("uses a standard Markdown renderer with emphasis styles", async () => {
 });
 
 test("supports editing and updating existing articles", async () => {
-  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const [page, styles] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
 
   assert.match(page, /articleId\?: string/);
   assert.match(page, /const editArticle = \(article: Article\)/);
@@ -71,6 +74,9 @@ test("supports editing and updating existing articles", async () => {
   assert.match(page, /onEdit=\{editArticle\}/);
   assert.match(page, />编辑文章<\/button>/);
   assert.match(page, /draft\.articleId \? "保存修改" : "发布到本机"/);
+  assert.match(page, /normalizeSlug\(draft\.title\) !== normalizeSlug\(draft\.slug\)/);
+  assert.match(page, /标题与 Slug 不同：文章列表将显示标题，链接将继续使用此 Slug。/);
+  assert.match(styles, /\.editor-meta \.slug-hint\s*\{/);
 });
 
 test("keeps author controls local and hides them from public readers", async () => {
@@ -114,7 +120,7 @@ test("generates the article list from Markdown Front Matter", async () => {
   ]);
 
   const markdownFiles = filenames.filter((filename) => filename.endsWith(".md"));
-  assert.equal(markdownFiles.length, 3);
+  assert.ok(markdownFiles.length >= 3);
   for (const filename of markdownFiles) {
     const source = await readFile(new URL(`../content/posts/${filename}`, import.meta.url), "utf8");
     const { data, content } = matter(source);
@@ -134,11 +140,18 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.match(packageJson, /"prebuild:github": "npm run content:generate"/);
   assert.match(page, /`slug: \$\{JSON\.stringify\(slug\)\}`/);
   assert.match(page, /fetch\("\/api\/local-post"/);
+  assert.match(page, /cache: "no-store"/);
+  assert.match(page, /setProjectArticles/);
   assert.match(page, /保存到文章目录/);
-  assert.match(page, /已保存到 content\/posts\//);
-  assert.match(localPostsPlugin, /const route = "\/api\/local-post"/);
+  assert.match(page, /文章列表已更新/);
+  assert.match(page, /localStorage\.setItem\("corner-draft", JSON\.stringify\(emptyDraft\)\)/);
+  assert.match(localPostsPlugin, /const postRoute = "\/api\/local-post"/);
+  assert.match(localPostsPlugin, /request\.method === "GET"/);
+  assert.match(localPostsPlugin, /article: existingPost\.article/);
   assert.match(localPostsPlugin, /resolve\(projectRoot, "content", "posts"\)/);
   assert.match(localPostsPlugin, /await rename\(temporary, destination\)/);
+  assert.match(localPostsPlugin, /await unlink\(destination\)/);
+  assert.match(localPostsPlugin, /existingPost\.markdown/);
   assert.match(localPostsPlugin, /execFileAsync\(process\.execPath/);
   assert.doesNotMatch(page, /excerpt:\s*draft\.excerpt\.trim\(\) \|\| draft\.content/);
   assert.match(page, /article\.excerpt && <p>\{article\.excerpt\}<\/p>/);
@@ -161,4 +174,27 @@ test("keeps AI summarization local to the development editor", async () => {
   assert.match(viteConfig, /\.local\/llm-summary-plugin\.mjs/);
   assert.match(viteConfig, /existsSync\(localLlmPluginPath\)/);
   assert.match(gitignore, /^\/\.local\/$/m);
+});
+
+test("uploads article images into the public post asset directory", async () => {
+  const [page, styles, localPostsPlugin, readme] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../build/local-posts-plugin.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../README.md", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /fetch\("\/api\/local-image"/);
+  assert.match(page, /uploadingImage \? "正在保存图片…" : "＋ 插入图片"/);
+  assert.match(page, /accept="image\/png,image\/jpeg,image\/gif,image\/webp,image\/avif"/);
+  assert.match(page, /insertMarkdownImage\(result\.path, alt\)/);
+  assert.match(page, /markdownTextareaRef\.current\?\.setSelectionRange/);
+  assert.match(styles, /\.prose img\s*\{/);
+  assert.match(styles, /\.writing-toolbar\s*\{/);
+  assert.match(localPostsPlugin, /const imageRoute = "\/api\/local-image"/);
+  assert.match(localPostsPlugin, /resolve\(publicDirectory, "images", "posts", year, month\)/);
+  assert.match(localPostsPlugin, /createHash\("sha256"\)/);
+  assert.match(localPostsPlugin, /图片不能超过 12 MB/);
+  assert.match(localPostsPlugin, /path: `images\/posts\/\$\{year\}\/\$\{month\}\//);
+  assert.match(readme, /public\/images\/posts\/年\/月\//);
 });

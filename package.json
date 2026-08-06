@@ -7,6 +7,7 @@
   },
   "scripts": {
     "content:generate": "node scripts/generate-posts.mjs",
+    "edit:local": "./scripts/start-local-editor.command",
     "predev": "npm run content:generate",
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "prebuild": "npm run content:generate",

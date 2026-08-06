@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import ReactMarkdown from "react-markdown";
 import { generatedPosts } from "./generated-posts";
 
@@ -33,6 +33,16 @@ type SummaryResponse = {
 
 type PostSaveResponse = {
   filename?: string;
+  article?: Article;
+  error?: string;
+};
+
+type PostListResponse = {
+  articles?: Article[];
+};
+
+type ImageSaveResponse = {
+  path?: string;
   error?: string;
 };
 
@@ -104,6 +114,11 @@ function removeLegacyAutoExcerpt(article: Article) {
     : article;
 }
 
+function upsertArticle(articles: Article[], article: Article) {
+  return [article, ...articles.filter((item) => item.id !== article.id)]
+    .sort((left, right) => right.date.localeCompare(left.date));
+}
+
 function Markdown({ source }: { source: string }) {
   return (
     <div className="prose">
@@ -115,14 +130,23 @@ function Markdown({ source }: { source: string }) {
 export default function Home() {
   const [view, setView] = useState<View>({ name: "home" });
   const [localArticles, setLocalArticles] = useState<Article[]>([]);
+  const [projectArticles, setProjectArticles] = useState<Article[]>(repositoryArticles);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [draftReady, setDraftReady] = useState(false);
   const [toast, setToast] = useState("");
   const [summarizing, setSummarizing] = useState(false);
   const [savingMarkdown, setSavingMarkdown] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const markdownTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const localAiEnabled = process.env.NODE_ENV === "development";
+  const slugDiffersFromTitle = Boolean(
+    draft.title.trim() &&
+    draft.slug.trim() &&
+    normalizeSlug(draft.title) !== normalizeSlug(draft.slug),
+  );
   const editorEnabled = useSyncExternalStore(
     subscribeToEditorEnvironment,
     localEditorAvailable,
@@ -133,9 +157,9 @@ export default function Home() {
     const localIds = new Set(localArticles.map((article) => article.id));
     return [
       ...localArticles,
-      ...repositoryArticles.filter((article) => !localIds.has(article.id)),
+      ...projectArticles.filter((article) => !localIds.has(article.id)),
     ];
-  }, [localArticles]);
+  }, [localArticles, projectArticles]);
 
   const categories = useMemo(
     () => Array.from(new Set(articles.map((article) => article.category))).filter(Boolean),
@@ -172,6 +196,15 @@ export default function Home() {
         setDraftReady(true);
         return;
       }
+      void fetch("/api/local-post", { cache: "no-store" })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const result = await response.json() as PostListResponse;
+          if (Array.isArray(result.articles)) setProjectArticles(result.articles);
+        })
+        .catch(() => {
+          // Keep the generated article snapshot when the local writer is unavailable.
+        });
       try {
         const storedArticles = JSON.parse(localStorage.getItem("corner-posts") || "[]");
         const storedDraft = JSON.parse(localStorage.getItem("corner-draft") || "null");
@@ -329,6 +362,68 @@ export default function Home() {
     }
   };
 
+  const insertMarkdownImage = (path: string, alt: string) => {
+    const textarea = markdownTextareaRef.current;
+    const start = textarea?.selectionStart ?? draft.content.length;
+    const end = textarea?.selectionEnd ?? start;
+
+    setDraft((current) => {
+      const before = current.content.slice(0, start);
+      const after = current.content.slice(end);
+      const prefix = before && !before.endsWith("\n") ? "\n\n" : "";
+      const suffix = after && !after.startsWith("\n") ? "\n\n" : "";
+      const markdown = `![${alt}](${path})`;
+      const nextCursor = before.length + prefix.length + markdown.length;
+
+      window.requestAnimationFrame(() => {
+        markdownTextareaRef.current?.focus();
+        markdownTextareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+      });
+      return { ...current, content: before + prefix + markdown + suffix + after };
+    });
+  };
+
+  const uploadImage = async (file: File) => {
+    if (file.size > 12 * 1024 * 1024) {
+      notify("图片不能超过 12 MB");
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const response = await fetch("/api/local-image", {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+          "X-File-Name": encodeURIComponent(file.name),
+        },
+        body: file,
+      });
+      const responseText = await response.text();
+      let result: ImageSaveResponse = {};
+      try {
+        result = JSON.parse(responseText) as ImageSaveResponse;
+      } catch {
+        if (response.status === 404) {
+          throw new Error("本机图片保存服务未启动，请重启 npm run dev");
+        }
+        throw new Error("本机图片保存服务返回了无法识别的响应");
+      }
+      if (!response.ok || !result.path) {
+        throw new Error(result.error || "图片保存失败");
+      }
+      const alt = file.name
+        .replace(/\.[^.]+$/, "")
+        .replace(/[\\\[\]\r\n]+/g, " ")
+        .trim() || "图片";
+      insertMarkdownImage(result.path, alt);
+      notify("图片已保存并插入正文");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "图片保存失败");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const saveMarkdownToProject = async () => {
     if (!draft.title.trim() || !draft.content.trim()) {
       notify("请先写下标题和正文");
@@ -374,11 +469,17 @@ export default function Home() {
         }
         throw new Error("本机文章保存服务返回了无法识别的响应");
       }
+      const syncedArticle = result.article;
+      if (syncedArticle) {
+        setProjectArticles((current) => upsertArticle(current, syncedArticle));
+      }
       if (!response.ok || !result.filename) {
         throw new Error(result.error || "Markdown 保存失败");
       }
-      setDraft((current) => ({ ...current, articleId: slug, originalDate: date, slug }));
-      notify(`已保存到 content/posts/${result.filename}`);
+      setDraft({ ...emptyDraft });
+      localStorage.setItem("corner-draft", JSON.stringify(emptyDraft));
+      notify(`已保存到 content/posts/${result.filename}，文章列表已更新`);
+      window.location.hash = `article/${encodeURIComponent(slug)}`;
     } catch (error) {
       notify(error instanceof Error ? error.message : "Markdown 保存失败");
     } finally {
@@ -547,6 +648,9 @@ export default function Home() {
               <label>
                 <span>Slug（文章地址）</span>
                 <input value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: normalizeSlug(event.target.value) })} placeholder="留空则根据标题生成" disabled={Boolean(draft.articleId)} />
+                {slugDiffersFromTitle && (
+                  <small className="slug-hint">标题与 Slug 不同：文章列表将显示标题，链接将继续使用此 Slug。</small>
+                )}
               </label>
               <label>
                 <span>分类</span>
@@ -570,10 +674,31 @@ export default function Home() {
               </label>
             </div>
             <div className="editor-workspace">
-              <label className="writing-pane">
-                <span className="pane-label">MARKDOWN</span>
-                <textarea value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="从这里开始写下今天的想法……" aria-label="Markdown 正文" spellCheck="true" />
-              </label>
+              <section className="writing-pane">
+                <div className="writing-toolbar">
+                  <span className="pane-label">MARKDOWN</span>
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={uploadingImage}
+                  >
+                    {uploadingImage ? "正在保存图片…" : "＋ 插入图片"}
+                  </button>
+                  <input
+                    ref={imageInputRef}
+                    className="visually-hidden"
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+                    aria-label="选择要插入的图片"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = "";
+                      if (file) void uploadImage(file);
+                    }}
+                  />
+                </div>
+                <textarea ref={markdownTextareaRef} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="从这里开始写下今天的想法……" aria-label="Markdown 正文" spellCheck="true" />
+              </section>
               <section className="preview-pane" aria-label="文章实时预览">
                 <span className="pane-label">PREVIEW</span>
                 <article>
