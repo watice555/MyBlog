@@ -3,8 +3,8 @@
 set -u
 
 PROJECT_DIR="$(cd -- "$(dirname -- "$0")/.." && pwd)"
-PORT="${PORT:-8001}"
-BASE_URL="http://127.0.0.1:${PORT}"
+PORT="${PORT:-3000}"
+BASE_URL="http://localhost:${PORT}"
 EDITOR_URL="${BASE_URL}/#editor"
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}"
@@ -55,7 +55,7 @@ if [ "$SELECTED_PORT" != "$PORT" ]; then
   echo "端口 ${PORT} 已被其他程序占用，自动改用 ${SELECTED_PORT}。"
 fi
 PORT="$SELECTED_PORT"
-BASE_URL="http://127.0.0.1:${PORT}"
+BASE_URL="http://localhost:${PORT}"
 EDITOR_URL="${BASE_URL}/#editor"
 
 if [[ ! -d node_modules ]]; then
@@ -70,7 +70,7 @@ echo "正在启动凝泠本地编辑器…"
 echo "关闭此终端窗口或按 Control-C 即可停止服务。"
 echo
 
-npm run dev -- --port "$PORT" --hostname 127.0.0.1 &
+npm run dev -- --port "$PORT" --hostname localhost &
 server_pid=$!
 
 cleanup() {

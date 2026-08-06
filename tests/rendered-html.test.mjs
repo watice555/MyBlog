@@ -63,7 +63,7 @@ await writeFile(new URL("../generated.marker", import.meta.url), "generated", "u
   return { middleware, projectRoot };
 }
 
-async function requestLocalGenerate(middleware, { host = "127.0.0.1:8001", method = "POST", origin = "http://127.0.0.1:8001" } = {}) {
+async function requestLocalGenerate(middleware, { host = "localhost:3000", method = "POST", origin = "http://localhost:3000" } = {}) {
   let body = "";
   const response = {
     statusCode: 200,
@@ -148,7 +148,11 @@ test("supports editing and updating existing articles", async () => {
 });
 
 test("keeps author controls local and hides them from public readers", async () => {
-  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const [page, startScript, readme] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/start-local-editor.command", import.meta.url), "utf8"),
+    readFile(new URL("../README.md", import.meta.url), "utf8"),
+  ]);
 
   assert.match(page, /function localEditorAvailable\(\)/);
   assert.match(page, /\["localhost", "127\.0\.0\.1", "::1", "\[::1\]"\]/);
@@ -159,6 +163,10 @@ test("keeps author controls local and hides them from public readers", async () 
   assert.match(page, /canEdit && <button type="button" onClick=\{\(\) => onEdit\(article\)\}>编辑文章<\/button>/);
   assert.match(page, /if \(!localEditorAvailable\(\)\) \{/);
   assert.match(page, /if \(!draftReady \|\| !editorEnabled\) return/);
+  assert.match(startScript, /PORT="\$\{PORT:-3000\}"/);
+  assert.match(startScript, /BASE_URL="http:\/\/localhost:\$\{PORT\}"/);
+  assert.match(startScript, /--hostname localhost/);
+  assert.match(readme, /npm run dev` 和 `npm run edit:local` 默认都使用 `http:\/\/localhost:3000`/);
 });
 
 test("offers public article search and category filtering", async () => {
