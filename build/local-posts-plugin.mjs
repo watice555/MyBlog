@@ -162,7 +162,7 @@ function parseArticle(markdown, filename, expectedSlug) {
     id,
     title,
     excerpt: String(data.excerpt ?? "").trim(),
-    category: String(data.category ?? "随笔").trim() || "随笔",
+    category: String(data.category ?? "评论").trim() || "评论",
     date: rawDate.replaceAll("-", "."),
     readTime: `${Math.max(1, Math.ceil(body.replace(/\s/g, "").length / 400))} 分钟`,
     content: body,

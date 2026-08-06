@@ -27,7 +27,7 @@ Add focused tests in `tests/rendered-html.test.mjs` when changing public renderi
 
 ## Content & Generated Files
 
-Each file in `content/posts/` must contain non-empty Markdown plus valid front matter. `title` and `date` are required, `date` uses `YYYY-MM-DD`, `slug` must be unique, `category` defaults to `随笔`, and `excerpt` is optional. Preserve an author's wording, slugs, dates, and article files unless content editing is explicitly in scope. Do not delete or replace posts merely to make tests pass.
+Each file in `content/posts/` must contain non-empty Markdown plus valid front matter. `title` and `date` are required, `date` uses `YYYY-MM-DD`, `slug` must be unique, `category` defaults to `评论`, and `excerpt` is optional. Preserve an author's wording, slugs, dates, and article files unless content editing is explicitly in scope. Do not delete or replace posts merely to make tests pass.
 
 After adding, editing, renaming, or deleting a post, run `npm run content:generate` and include the corresponding `app/generated-posts.ts` update in the same commit. Keep post image references portable and store publishable uploads under `public/images/posts/年/月/`.
 

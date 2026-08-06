@@ -75,7 +75,7 @@ async function generatePosts() {
       id: slug,
       title: requiredText(data.title, "title", filename),
       excerpt,
-      category: String(data.category ?? "随笔").trim() || "随笔",
+      category: String(data.category ?? "评论").trim() || "评论",
       date: date.replaceAll("-", "."),
       readTime: calculateReadTime(body),
       content: body,

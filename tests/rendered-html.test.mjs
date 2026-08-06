@@ -20,9 +20,14 @@ test("server-renders the finished blog", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
 
-  assert.match(html, /<title>一隅｜个人文字博客<\/title>/);
-  assert.match(html, /把日子写成/);
-  assert.match(html, /最近写下的/);
+  assert.match(html, /<title>凝泠｜watice’s blog<\/title>/);
+  assert.match(html, /在噪声里/);
+  assert.match(html, /辨认真实/);
+  assert.match(html, /COMMENTARY · FINANCE · TECHNOLOGY/);
+  assert.match(html, /watice’s blog/);
+  assert.doesNotMatch(html, /一隅|CORNER NOTES|PERSONAL WRITING/);
+  assert.match(html, /最近评论/);
+  assert.match(html, /金融、科技/);
   assert.doesNotMatch(html, /写文章|编辑文章|href="#editor"/);
   assert.doesNotMatch(html, /AI 智能总结|api\/local-summary/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
@@ -54,6 +59,8 @@ test("uses a standard Markdown renderer with emphasis styles", async () => {
   assert.match(page, /content:\s*""/);
   assert.match(page, /placeholder="从这里开始写下今天的想法……"/);
   assert.match(page, /placeholder="用一小段话介绍这篇文章（可选）"/);
+  assert.match(page, /category:\s*"评论"/);
+  assert.match(page, /placeholder="评论"/);
   assert.match(page, /rows=\{4\}/);
   assert.match(styles, /\.editor-meta textarea\s*\{/);
   assert.match(styles, /resize:\s*vertical/);
@@ -135,6 +142,7 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.doesNotMatch(page, /const starterArticles/);
   assert.match(generator, /slug .* 重复/);
   assert.match(generator, /const excerpt = String\(data\.excerpt \?\? ""\)\.trim\(\)/);
+  assert.match(generator, /data\.category \?\? "评论"/);
   assert.doesNotMatch(generator, /createExcerpt|自动提取/);
   assert.match(packageJson, /"content:generate": "node scripts\/generate-posts\.mjs"/);
   assert.match(packageJson, /"prebuild:github": "npm run content:generate"/);
@@ -152,6 +160,7 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.match(localPostsPlugin, /await rename\(temporary, destination\)/);
   assert.match(localPostsPlugin, /await unlink\(destination\)/);
   assert.match(localPostsPlugin, /existingPost\.markdown/);
+  assert.match(localPostsPlugin, /data\.category \?\? "评论"/);
   assert.match(localPostsPlugin, /execFileAsync\(process\.execPath/);
   assert.doesNotMatch(page, /excerpt:\s*draft\.excerpt\.trim\(\) \|\| draft\.content/);
   assert.match(page, /article\.excerpt && <p>\{article\.excerpt\}<\/p>/);

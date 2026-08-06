@@ -22,7 +22,7 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-if curl --silent --fail --max-time 2 "$BASE_URL" | grep -q "一隅"; then
+if curl --silent --fail --max-time 2 "$BASE_URL" | grep -q "凝泠"; then
   echo "本地博客已经启动，正在打开编辑器…"
   open "$EDITOR_URL"
   exit 0
@@ -66,7 +66,7 @@ if [[ ! -d node_modules ]]; then
   }
 fi
 
-echo "正在启动一隅本地编辑器…"
+echo "正在启动凝泠本地编辑器…"
 echo "关闭此终端窗口或按 Control-C 即可停止服务。"
 echo
 
@@ -81,7 +81,7 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 for attempt in {1..90}; do
-  if curl --silent --fail --max-time 2 "$BASE_URL" | grep -q "一隅"; then
+  if curl --silent --fail --max-time 2 "$BASE_URL" | grep -q "凝泠"; then
     echo
     echo "编辑器已就绪，正在打开浏览器…"
     open "$EDITOR_URL"

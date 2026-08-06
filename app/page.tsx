@@ -56,7 +56,7 @@ const emptyDraft: Draft = {
   slug: "",
   title: "",
   excerpt: "",
-  category: "随笔",
+  category: "评论",
   content: "",
 };
 
@@ -276,7 +276,7 @@ export default function Home() {
       id: resolvedSlug,
       title: draft.title.trim(),
       excerpt: draft.excerpt.trim(),
-      category: draft.category.trim() || "随笔",
+      category: draft.category.trim() || "评论",
       date: draft.originalDate || editingArticle?.date || formatDate(new Date()),
       readTime: readTime(draft.content),
       content: draft.content,
@@ -442,7 +442,7 @@ export default function Home() {
       `slug: ${JSON.stringify(slug)}`,
       `title: ${JSON.stringify(draft.title.trim())}`,
       `date: ${JSON.stringify(date)}`,
-      `category: ${JSON.stringify(draft.category.trim() || "随笔")}`,
+      `category: ${JSON.stringify(draft.category.trim() || "评论")}`,
       `excerpt: ${JSON.stringify(draft.excerpt.trim())}`,
       "---",
       "",
@@ -492,9 +492,9 @@ export default function Home() {
   return (
     <div className="site-shell">
       <header className="site-header">
-        <a className="brand" href="#home" aria-label="一隅博客首页">
-          <span className="brand-mark">一隅</span>
-          <span className="brand-note">CORNER NOTES</span>
+        <a className="brand" href="#home" aria-label="凝泠博客首页">
+          <span className="brand-mark">凝泠</span>
+          <span className="brand-note">watice’s blog</span>
         </a>
         <nav className="site-nav" aria-label="主导航">
           <a className={activeNav === "home" ? "active" : ""} href="#home">首页</a>
@@ -509,23 +509,23 @@ export default function Home() {
           <>
             <section className="hero" aria-labelledby="hero-title">
               <div className="hero-copy">
-                <p className="eyebrow"><span /> PERSONAL WRITING · SINCE 2026</p>
-                <h1 id="hero-title">把日子写成<br />慢慢展开的纸</h1>
-                <p className="hero-intro">这里收藏日常、阅读和偶尔路过心里的念头。<br />不赶时间，只认真写下值得记住的部分。</p>
+                <p className="eyebrow"><span /> COMMENTARY · FINANCE · TECHNOLOGY</p>
+                <h1 id="hero-title">在噪声里<br />辨认真实</h1>
+                <p className="hero-intro">这里写金融、科技，以及它们如何改变商业与生活。<br />记录事实，拆解叙事，也保留可被修正的判断。</p>
                 <a className="primary-link" href="#archive">开始阅读 <span aria-hidden="true">→</span></a>
               </div>
-              <aside className="today-note" aria-label="今日札记">
+              <aside className="today-note" aria-label="凝泠札记">
                 <span className="note-index">N° 01</span>
-                <p>“风从窗边经过，<br />纸页替我记住了它。”</p>
-                <span className="note-date">今日札记 · 七月</span>
+                <p>“观点可以鲜明，<br />判断必须克制。”</p>
+                <span className="note-date">凝泠札记 · 长期观察</span>
               </aside>
             </section>
 
             <section className="latest" aria-labelledby="latest-title">
               <div className="section-heading">
                 <div>
-                  <p className="section-kicker">RECENT STORIES</p>
-                  <h2 id="latest-title">最近写下的</h2>
+                  <p className="section-kicker">RECENT COMMENTARY</p>
+                  <h2 id="latest-title">最近评论</h2>
                 </div>
                 <a href="#archive">查看全部 {String(articles.length).padStart(2, "0")} <span aria-hidden="true">↗</span></a>
               </div>
@@ -537,8 +537,8 @@ export default function Home() {
             </section>
 
             <section className="home-note">
-              <p className="section-kicker">A SMALL NOTE</p>
-              <p>愿每一次书写，都让混乱的世界安静一点。</p>
+              <p className="section-kicker">A CLEARER VIEW</p>
+              <p>在信息不断升温的时代，保持一份清醒的判断。</p>
               <span aria-hidden="true">✦</span>
             </section>
           </>
@@ -546,7 +546,7 @@ export default function Home() {
 
         {view.name === "archive" && (
           <section className="inner-page archive-page">
-            <PageIntro label="ALL STORIES" title="文章归档" text="按写下的时间排列。慢慢读，不必一次看完。" />
+            <PageIntro label="ALL COMMENTARY" title="文章归档" text="围绕金融、科技与时代变化的评论，按发布时间排列。" />
             <div className="archive-tools" aria-label="文章搜索与分类筛选">
               <label className="archive-search">
                 <span>搜索文章</span>
@@ -610,14 +610,15 @@ export default function Home() {
 
         {view.name === "about" && (
           <section className="inner-page about-page">
-            <PageIntro label="ABOUT THIS PLACE" title="关于一隅" text="一小块属于文字，也属于自己的安静地方。" />
+            <PageIntro label="ABOUT WATICE" title="关于凝泠" text="在快速变化的世界里，保持冷静、清澈而诚实的观察。" />
             <div className="about-grid">
               <div className="about-number">01</div>
               <div className="about-copy prose">
-                <p>你好，我是这个博客的作者。这里写生活里的细枝末节，也写阅读、行走和那些还没有答案的问题。</p>
-                <p>“一隅”不是躲开世界，而是给自己留一个能够好好观察世界的位置。文章没有固定更新频率，有想说的话时就回来写一篇。</p>
-                <blockquote>保持好奇，保持善意，也保持一点不被催促的空白。</blockquote>
-                <p className="contact-line">联系我 · hello@example.com</p>
+                <p>你好，我是 watice。这里主要写金融、科技，以及它们与商业、社会和个人选择的交汇。</p>
+                <p>“凝”是停下来凝视与沉淀，“泠”是清澈而冷静。这个名字提醒我：面对快速变化的市场与技术，先看清事实，再形成判断。</p>
+                <p>文章以评论为主，不追求仓促的结论，更在意论据、结构和长期变化。观点会更新，但对事实与逻辑的要求不会降低。</p>
+                <blockquote>对信息保持敏感，对叙事保持距离，对判断保持诚实。</blockquote>
+                <p className="contact-line">关注主题 · 金融 / 科技 / 商业 / 社会</p>
               </div>
             </div>
           </section>
@@ -654,7 +655,7 @@ export default function Home() {
               </label>
               <label>
                 <span>分类</span>
-                <input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="随笔" />
+                <input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="评论" />
               </label>
               <label className="excerpt-field">
                 <span className="excerpt-label">
@@ -719,8 +720,8 @@ export default function Home() {
 
       <footer className="site-footer">
         <div>
-          <span className="footer-brand">一隅</span>
-          <p>在喧闹世界里，留一页纸给自己。</p>
+          <span className="footer-brand">凝泠</span>
+          <p>在噪声里保持清醒，在变化中寻找结构。</p>
         </div>
         <div className="footer-links">
           <a href="#home">首页</a>
@@ -728,7 +729,7 @@ export default function Home() {
           <a href="#about">关于</a>
           {editorEnabled && <a href="#editor">编辑器</a>}
         </div>
-        <p className="copyright">© 2026 一隅 · Built for slow reading</p>
+        <p className="copyright">© 2026 凝泠 · watice’s blog</p>
       </footer>
 
       <div className={`toast ${toast ? "show" : ""}`} role="status" aria-live="polite">{toast}</div>
@@ -789,7 +790,7 @@ function ArticlePage({ article, onEdit, canEdit }: { article?: Article; onEdit: 
       </header>
       <Markdown source={article.content} />
       <footer className="reading-footer">
-        <span>写于一隅</span>
+        <span>写于凝泠</span>
         <div className="reading-actions">
           {canEdit && <button type="button" onClick={() => onEdit(article)}>编辑文章</button>}
           <a href="#archive">继续阅读 →</a>
