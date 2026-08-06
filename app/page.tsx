@@ -138,7 +138,7 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [summarizing, setSummarizing] = useState(false);
   const [savingMarkdown, setSavingMarkdown] = useState(false);
-  const [generatingContent, setGeneratingContent] = useState(false);
+  const [syncingArticles, setSyncingArticles] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -327,8 +327,12 @@ export default function Home() {
     notify("草稿已保存在浏览器中");
   };
 
-  const generateContent = async () => {
-    setGeneratingContent(true);
+  const syncArticles = async () => {
+    const previousLocalArticles = localArticles;
+    const previousStoredArticles = localStorage.getItem("corner-posts");
+    setSyncingArticles(true);
+    setLocalArticles([]);
+    localStorage.removeItem("corner-posts");
     try {
       const response = await fetch("/api/local-content-generate", {
         method: "POST",
@@ -349,11 +353,17 @@ export default function Home() {
         throw new Error(result.error || "文章列表生成失败");
       }
       setProjectArticles(result.articles);
-      notify(`文章列表已重新生成，共 ${result.count ?? result.articles.length} 篇`);
+      clearArchiveFilters();
+      window.location.hash = "archive";
+      notify(`已从 content/posts 同步 ${result.count ?? result.articles.length} 篇文章`);
     } catch (error) {
+      setLocalArticles(previousLocalArticles);
+      if (previousStoredArticles) {
+        localStorage.setItem("corner-posts", previousStoredArticles);
+      }
       notify(error instanceof Error ? error.message : "文章列表生成失败");
     } finally {
-      setGeneratingContent(false);
+      setSyncingArticles(false);
     }
   };
 
@@ -533,7 +543,14 @@ export default function Home() {
           <a className={activeNav === "home" ? "active" : ""} href="#home">首页</a>
           <a className={activeNav === "archive" ? "active" : ""} href="#archive">文章</a>
           <a className={activeNav === "about" ? "active" : ""} href="#about">关于</a>
-          {editorEnabled && <a className="editor-link" href="#editor">写文章 <span aria-hidden="true">↗</span></a>}
+          {editorEnabled && (
+            <>
+              <button className="sync-link" type="button" onClick={syncArticles} disabled={syncingArticles}>
+                {syncingArticles ? "同步中…" : "同步文章"} <span aria-hidden="true">↻</span>
+              </button>
+              <a className="editor-link" href="#editor">写文章 <span aria-hidden="true">↗</span></a>
+            </>
+          )}
         </nav>
       </header>
 
@@ -666,9 +683,6 @@ export default function Home() {
               </div>
               <div className="editor-actions">
                 {draft.articleId && <button className="secondary-button" type="button" onClick={startNewDraft}>新建文章</button>}
-                <button className="secondary-button" type="button" onClick={generateContent} disabled={generatingContent}>
-                  {generatingContent ? "正在重新生成…" : "重新生成文章"}
-                </button>
                 <button className="secondary-button" type="button" onClick={saveDraft}>保存草稿</button>
                 <button className="secondary-button" type="button" onClick={saveMarkdownToProject} disabled={savingMarkdown}>
                   {savingMarkdown ? "正在保存…" : "保存到文章目录"}

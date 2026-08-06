@@ -18,6 +18,17 @@ async function render() {
   );
 }
 
+function normalizeSlug(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase("en-US")
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^\p{L}\p{N}-]+/gu, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 async function createLocalApiFixture(testContext) {
   const projectRoot = await mkdtemp(resolve(tmpdir(), "watice-local-content-"));
   testContext.after(() => rm(projectRoot, { recursive: true, force: true }));
@@ -78,7 +89,7 @@ test("server-renders the finished blog", async () => {
   assert.doesNotMatch(html, /一隅|CORNER NOTES|PERSONAL WRITING/);
   assert.match(html, /最近评论/);
   assert.match(html, /金融、科技/);
-  assert.doesNotMatch(html, /写文章|编辑文章|重新生成文章|href="#editor"/);
+  assert.doesNotMatch(html, /写文章|编辑文章|同步文章|href="#editor"/);
   assert.doesNotMatch(html, /AI 智能总结|api\/local-summary/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
@@ -141,7 +152,9 @@ test("keeps author controls local and hides them from public readers", async () 
 
   assert.match(page, /function localEditorAvailable\(\)/);
   assert.match(page, /\["localhost", "127\.0\.0\.1", "::1", "\[::1\]"\]/);
-  assert.match(page, /editorEnabled && <a className="editor-link"/);
+  assert.match(page, /editorEnabled && \(/);
+  assert.match(page, /<button className="sync-link"/);
+  assert.match(page, /<a className="editor-link"/);
   assert.match(page, /view\.name === "editor" && editorEnabled/);
   assert.match(page, /canEdit && <button type="button" onClick=\{\(\) => onEdit\(article\)\}>编辑文章<\/button>/);
   assert.match(page, /if \(!localEditorAvailable\(\)\) \{/);
@@ -185,7 +198,7 @@ test("generates the article list from Markdown Front Matter", async () => {
     assert.ok(data.title);
     assert.match(String(data.date instanceof Date ? data.date.toISOString().slice(0, 10) : data.date), /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(content.trim());
-    assert.match(generated, new RegExp(`"id": "${data.slug}"`));
+    assert.match(generated, new RegExp(`"id": "${normalizeSlug(data.slug)}"`));
   }
 
   assert.match(page, /import \{ generatedPosts \} from "\.\/generated-posts"/);
@@ -201,8 +214,13 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.match(page, /fetch\("\/api\/local-content-generate"/);
   assert.match(page, /cache: "no-store"/);
   assert.match(page, /setProjectArticles/);
-  assert.match(page, /generatingContent \? "正在重新生成…" : "重新生成文章"/);
-  assert.match(page, /文章列表已重新生成/);
+  assert.match(page, /syncingArticles \? "同步中…" : "同步文章"/);
+  assert.match(page, /setLocalArticles\(\[\]\)/);
+  assert.match(page, /localStorage\.removeItem\("corner-posts"\)/);
+  assert.match(page, /setLocalArticles\(previousLocalArticles\)/);
+  assert.match(page, /localStorage\.setItem\("corner-posts", previousStoredArticles\)/);
+  assert.match(page, /window\.location\.hash = "archive"/);
+  assert.match(page, /已从 content\/posts 同步/);
   assert.match(page, /保存到文章目录/);
   assert.match(page, /文章列表已更新/);
   assert.match(page, /localStorage\.setItem\("corner-draft", JSON\.stringify\(emptyDraft\)\)/);

@@ -156,16 +156,45 @@ textarea:focus-visible {
   transform: scaleX(1);
 }
 
+.editor-link,
+.sync-link {
+  min-height: 42px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
 .editor-link {
-  padding: 11px 16px;
   background: var(--ink);
   color: var(--paper);
-  transition: background 180ms ease, transform 180ms ease;
+}
+
+.sync-link {
+  background: transparent;
+  color: var(--ink);
 }
 
 .editor-link:hover {
   background: var(--green);
+  color: var(--paper);
   transform: translateY(-2px);
+}
+
+.sync-link:hover:not(:disabled) {
+  background: var(--sage);
+  transform: translateY(-2px);
+}
+
+.sync-link:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .hero {
@@ -1141,8 +1170,8 @@ textarea:focus-visible {
 
   .site-nav {
     display: grid;
-    grid-template-columns: repeat(2, auto);
-    gap: 8px 16px;
+    grid-template-columns: repeat(3, auto);
+    gap: 8px 12px;
     justify-items: end;
     font-size: 12px;
   }
@@ -1151,8 +1180,14 @@ textarea:focus-visible {
     padding: 3px 0;
   }
 
-  .editor-link {
+  .editor-link,
+  .sync-link {
+    min-height: 30px;
     padding: 4px 8px;
+  }
+
+  .sync-link {
+    grid-column: 2;
   }
 
   .hero {
