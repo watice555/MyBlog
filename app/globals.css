@@ -815,6 +815,13 @@ textarea:focus-visible {
   background: var(--green);
 }
 
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+  transform: none;
+}
+
 .editor-tip {
   margin: 0 0 36px;
   color: var(--muted);

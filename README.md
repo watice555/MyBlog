@@ -20,6 +20,7 @@ npm run dev
 页面右上角的「写文章」会打开编辑器：
 
 - 内容输入后会自动保存在当前浏览器；
+- 「重新生成文章」等价于运行 `npm run content:generate`，适合手动增删 Markdown 后刷新文章列表；
 - 「发布到本机」会让文章出现在这台设备的文章列表中；
 - 「保存到文章目录」会把包含 slug、标题、日期、分类和摘要的 Markdown 文件直接写入 `content/posts/`；
 - 「插入图片」会把图片保存到 `public/images/posts/年/月/`，并在当前光标处自动插入 Markdown 引用；

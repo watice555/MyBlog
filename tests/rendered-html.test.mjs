@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import test from "node:test";
 import matter from "gray-matter";
+import createLocalPostsPlugin from "../build/local-posts-plugin.mjs";
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -13,6 +16,53 @@ async function render() {
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
+}
+
+async function createLocalApiFixture(testContext) {
+  const projectRoot = await mkdtemp(resolve(tmpdir(), "watice-local-content-"));
+  testContext.after(() => rm(projectRoot, { recursive: true, force: true }));
+
+  const postsDirectory = resolve(projectRoot, "content", "posts");
+  const scriptsDirectory = resolve(projectRoot, "scripts");
+  await mkdir(postsDirectory, { recursive: true });
+  await mkdir(scriptsDirectory, { recursive: true });
+  await writeFile(resolve(postsDirectory, "fixture.md"), `---
+slug: "fixture"
+title: "Fixture"
+date: "2026-08-06"
+category: "评论"
+excerpt: ""
+---
+
+Fixture body.
+`, "utf8");
+  await writeFile(resolve(scriptsDirectory, "generate-posts.mjs"), `import { writeFile } from "node:fs/promises";
+await writeFile(new URL("../generated.marker", import.meta.url), "generated", "utf8");
+`, "utf8");
+
+  let middleware;
+  createLocalPostsPlugin(projectRoot).configureServer({
+    middlewares: {
+      use(handler) {
+        middleware = handler;
+      },
+    },
+  });
+  assert.equal(typeof middleware, "function");
+  return { middleware, projectRoot };
+}
+
+async function requestLocalGenerate(middleware, { host = "127.0.0.1:8001", method = "POST", origin = "http://127.0.0.1:8001" } = {}) {
+  let body = "";
+  const response = {
+    statusCode: 200,
+    setHeader() {},
+    end(chunk = "") {
+      body += chunk;
+    },
+  };
+  await middleware({ headers: { host, origin }, method, url: "/api/local-content-generate" }, response, () => {});
+  return { body: JSON.parse(body), status: response.statusCode };
 }
 
 test("server-renders the finished blog", async () => {
@@ -28,7 +78,7 @@ test("server-renders the finished blog", async () => {
   assert.doesNotMatch(html, /一隅|CORNER NOTES|PERSONAL WRITING/);
   assert.match(html, /最近评论/);
   assert.match(html, /金融、科技/);
-  assert.doesNotMatch(html, /写文章|编辑文章|href="#editor"/);
+  assert.doesNotMatch(html, /写文章|编辑文章|重新生成文章|href="#editor"/);
   assert.doesNotMatch(html, /AI 智能总结|api\/local-summary/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
@@ -148,12 +198,19 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.match(packageJson, /"prebuild:github": "npm run content:generate"/);
   assert.match(page, /`slug: \$\{JSON\.stringify\(slug\)\}`/);
   assert.match(page, /fetch\("\/api\/local-post"/);
+  assert.match(page, /fetch\("\/api\/local-content-generate"/);
   assert.match(page, /cache: "no-store"/);
   assert.match(page, /setProjectArticles/);
+  assert.match(page, /generatingContent \? "正在重新生成…" : "重新生成文章"/);
+  assert.match(page, /文章列表已重新生成/);
   assert.match(page, /保存到文章目录/);
   assert.match(page, /文章列表已更新/);
   assert.match(page, /localStorage\.setItem\("corner-draft", JSON\.stringify\(emptyDraft\)\)/);
   assert.match(localPostsPlugin, /const postRoute = "\/api\/local-post"/);
+  assert.match(localPostsPlugin, /const generateRoute = "\/api\/local-content-generate"/);
+  assert.match(localPostsPlugin, /isAllowedHost\(request\.headers\.host\)/);
+  assert.match(localPostsPlugin, /pathname === generateRoute/);
+  assert.match(localPostsPlugin, /articles, count: articles\.length/);
   assert.match(localPostsPlugin, /request\.method === "GET"/);
   assert.match(localPostsPlugin, /article: existingPost\.article/);
   assert.match(localPostsPlugin, /resolve\(projectRoot, "content", "posts"\)/);
@@ -167,6 +224,29 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.match(page, /article\.excerpt && <p className="reading-deck">/);
   assert.match(page, /function removeLegacyAutoExcerpt\(article: Article\)/);
   assert.match(page, /corner-excerpt-policy/);
+});
+
+test("regenerates content only through the loopback editor API", async (testContext) => {
+  const { middleware, projectRoot } = await createLocalApiFixture(testContext);
+  const marker = resolve(projectRoot, "generated.marker");
+
+  const remoteHost = await requestLocalGenerate(middleware, { host: "blog.example.com" });
+  assert.equal(remoteHost.status, 403);
+  await assert.rejects(access(marker));
+
+  const remoteOrigin = await requestLocalGenerate(middleware, { origin: "https://example.com" });
+  assert.equal(remoteOrigin.status, 403);
+  await assert.rejects(access(marker));
+
+  const wrongMethod = await requestLocalGenerate(middleware, { method: "GET" });
+  assert.equal(wrongMethod.status, 405);
+  await assert.rejects(access(marker));
+
+  const success = await requestLocalGenerate(middleware);
+  assert.equal(success.status, 200);
+  assert.equal(success.body.count, 1);
+  assert.equal(success.body.articles[0].id, "fixture");
+  assert.equal(await readFile(marker, "utf8"), "generated");
 });
 
 test("keeps AI summarization local to the development editor", async () => {

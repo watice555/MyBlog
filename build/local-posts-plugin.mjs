@@ -9,6 +9,7 @@ import matter from "gray-matter";
 const execFileAsync = promisify(execFile);
 const postRoute = "/api/local-post";
 const imageRoute = "/api/local-image";
+const generateRoute = "/api/local-content-generate";
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const maxImageBytes = 12 * 1024 * 1024;
 
@@ -23,6 +24,15 @@ function isAllowedOrigin(origin) {
   if (!origin) return true;
   try {
     return loopbackHosts.has(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedHost(host) {
+  if (!host) return false;
+  try {
+    return loopbackHosts.has(new URL(`http://${host}`).hostname);
   } catch {
     return false;
   }
@@ -202,9 +212,29 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
         const pathname = new URL(request.url || "/", "http://localhost").pathname;
-        if (pathname !== postRoute && pathname !== imageRoute) return next();
+        if (pathname !== postRoute && pathname !== imageRoute && pathname !== generateRoute) return next();
+        if (!isAllowedHost(request.headers.host)) {
+          sendJson(response, 403, { error: "只允许通过本机回环地址使用博客编辑器" });
+          return;
+        }
         if (!isAllowedOrigin(request.headers.origin)) {
-          sendJson(response, 403, { error: "只允许从本机博客编辑器保存文章" });
+          sendJson(response, 403, { error: "只允许从本机博客编辑器发起请求" });
+          return;
+        }
+        if (pathname === generateRoute) {
+          if (request.method !== "POST") {
+            sendJson(response, 405, { error: "只支持 POST 请求" });
+            return;
+          }
+          try {
+            await mkdir(postsDirectory, { recursive: true });
+            await execFileAsync(process.execPath, [generatorPath], { cwd: projectRoot });
+            const articles = await listPosts(postsDirectory);
+            sendJson(response, 200, { articles, count: articles.length });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "文章列表生成失败";
+            sendJson(response, 500, { error: message });
+          }
           return;
         }
         if (pathname === imageRoute) {

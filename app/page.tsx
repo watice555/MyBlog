@@ -39,6 +39,8 @@ type PostSaveResponse = {
 
 type PostListResponse = {
   articles?: Article[];
+  count?: number;
+  error?: string;
 };
 
 type ImageSaveResponse = {
@@ -136,6 +138,7 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [summarizing, setSummarizing] = useState(false);
   const [savingMarkdown, setSavingMarkdown] = useState(false);
+  const [generatingContent, setGeneratingContent] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -322,6 +325,36 @@ export default function Home() {
   const saveDraft = () => {
     localStorage.setItem("corner-draft", JSON.stringify(draft));
     notify("草稿已保存在浏览器中");
+  };
+
+  const generateContent = async () => {
+    setGeneratingContent(true);
+    try {
+      const response = await fetch("/api/local-content-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+      const responseText = await response.text();
+      let result: PostListResponse = {};
+      try {
+        result = JSON.parse(responseText) as PostListResponse;
+      } catch {
+        if (response.status === 404) {
+          throw new Error("本机内容生成服务未启动，请重启 npm run dev");
+        }
+        throw new Error("本机内容生成服务返回了无法识别的响应");
+      }
+      if (!response.ok || !result.articles) {
+        throw new Error(result.error || "文章列表生成失败");
+      }
+      setProjectArticles(result.articles);
+      notify(`文章列表已重新生成，共 ${result.count ?? result.articles.length} 篇`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "文章列表生成失败");
+    } finally {
+      setGeneratingContent(false);
+    }
   };
 
   const summarizeDraft = async () => {
@@ -633,6 +666,9 @@ export default function Home() {
               </div>
               <div className="editor-actions">
                 {draft.articleId && <button className="secondary-button" type="button" onClick={startNewDraft}>新建文章</button>}
+                <button className="secondary-button" type="button" onClick={generateContent} disabled={generatingContent}>
+                  {generatingContent ? "正在重新生成…" : "重新生成文章"}
+                </button>
                 <button className="secondary-button" type="button" onClick={saveDraft}>保存草稿</button>
                 <button className="secondary-button" type="button" onClick={saveMarkdownToProject} disabled={savingMarkdown}>
                   {savingMarkdown ? "正在保存…" : "保存到文章目录"}
