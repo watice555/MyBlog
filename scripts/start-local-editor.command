@@ -3,7 +3,7 @@
 set -u
 
 PROJECT_DIR="$(cd -- "$(dirname -- "$0")/.." && pwd)"
-PORT="${PORT:-3000}"
+PORT="${PORT:-8001}"
 BASE_URL="http://127.0.0.1:${PORT}"
 EDITOR_URL="${BASE_URL}/#editor"
 
@@ -28,12 +28,35 @@ if curl --silent --fail --max-time 2 "$BASE_URL" | grep -q "一隅"; then
   exit 0
 fi
 
-if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "端口 ${PORT} 已被其他程序占用，无法启动本地博客。"
-  echo "请关闭占用该端口的程序后重试。"
+FALLBACK_ATTEMPTS=100
+LAST_PORT=$((PORT + FALLBACK_ATTEMPTS - 1))
+if [ "$LAST_PORT" -gt 65535 ]; then
+  LAST_PORT=65535
+fi
+
+SELECTED_PORT=""
+candidate="$PORT"
+while [ "$candidate" -le "$LAST_PORT" ]; do
+  if ! lsof -nP -iTCP:"$candidate" -sTCP:LISTEN >/dev/null 2>&1; then
+    SELECTED_PORT="$candidate"
+    break
+  fi
+  candidate=$((candidate + 1))
+done
+
+if [ -z "$SELECTED_PORT" ]; then
+  echo "端口 ${PORT} 到 ${LAST_PORT} 均已被占用，无法启动本地博客。"
+  echo "请关闭占用这些端口的程序，或设置 PORT 环境变量指定其他端口。"
   pause_on_error
   exit 1
 fi
+
+if [ "$SELECTED_PORT" != "$PORT" ]; then
+  echo "端口 ${PORT} 已被其他程序占用，自动改用 ${SELECTED_PORT}。"
+fi
+PORT="$SELECTED_PORT"
+BASE_URL="http://127.0.0.1:${PORT}"
+EDITOR_URL="${BASE_URL}/#editor"
 
 if [[ ! -d node_modules ]]; then
   echo "首次启动，正在安装依赖…"
@@ -47,7 +70,7 @@ echo "正在启动一隅本地编辑器…"
 echo "关闭此终端窗口或按 Control-C 即可停止服务。"
 echo
 
-npm run dev &
+npm run dev -- --port "$PORT" --hostname 127.0.0.1 &
 server_pid=$!
 
 cleanup() {
