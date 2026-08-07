@@ -30,7 +30,7 @@ export const generatedPosts = [
   {
     "id": "2026-08-06-合并日报",
     "title": "2026-08-06 合并日报",
-    "excerpt": "",
+    "excerpt": "8月6日市场综述涵盖宇树科技IPO、AI巨头人事动荡及模型迭代、加密市场震荡与监管受阻、传统金融与加密融合加速等主线，同时涉及宏观汇率波动、地缘政治缓和、链上产品更新、DeFi安全事件及收益套利机会。",
     "category": "日报",
     "date": "2026.08.06",
     "readTime": "13 分钟",
@@ -39,7 +39,7 @@ export const generatedPosts = [
   {
     "id": "2026-08-05-合并日报",
     "title": "2026-08-05 合并日报",
-    "excerpt": "",
+    "excerpt": "SpaceX 巨额资本开支引发盈利担忧，AI 安全漏洞暴露模型风险。A 股风格切换至软件板块，宇树科技启动 IPO。地缘缓和推升 BTC 反弹，但流动性隐忧犹存；Coldcard 固件漏洞致重大损失，加密市场监管与法律纠纷持续发酵。",
     "category": "日报",
     "date": "2026.08.05",
     "readTime": "10 分钟",
@@ -48,7 +48,7 @@ export const generatedPosts = [
   {
     "id": "2026-08-04-合并日报",
     "title": "2026-08-04 合并日报",
-    "excerpt": "",
+    "excerpt": "日美联合干预汇市引发全球资产震荡，BTC价格波动后企稳；AI产业加速资本与基建投入，传统金融机构推进资产代币化；同时硬件钱包安全漏洞及监管政策变化凸显行业风险与挑战。",
     "category": "日报",
     "date": "2026.08.04",
     "readTime": "11 分钟",
@@ -57,7 +57,7 @@ export const generatedPosts = [
   {
     "id": "2026-08-03-合并日报",
     "title": "2026-08-03 合并日报",
-    "excerpt": "",
+    "excerpt": "美日联合干预汇市引发全球资产剧烈波动，韩国股市重挫；Gate.io与Coldcard爆发严重安全信任危机，加剧加密市场抛压；AI模型价格战白热化，Qwen等开源降低部署门槛；传统科技股分化，数据中心政策面临调整。",
     "category": "日报",
     "date": "2026.08.03",
     "readTime": "12 分钟",
@@ -66,7 +66,7 @@ export const generatedPosts = [
   {
     "id": "2026-08-01-合并日报",
     "title": "2026-08-01 合并日报",
-    "excerpt": "",
+    "excerpt": "美伊冲突与宏观干预共振致风险资产承压，BTC跌破6.3万美元并引发爆仓潮；Gate.io及Coldcard安全事件加剧行业信任危机；AI模型突破伴随安全隐患，A股科技板块剧烈波动，市场分歧显著。",
     "category": "日报",
     "date": "2026.08.01",
     "readTime": "11 分钟",
