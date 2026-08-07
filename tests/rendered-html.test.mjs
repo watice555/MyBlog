@@ -47,8 +47,11 @@ excerpt: ""
 
 Fixture body.
 `, "utf8");
-  await writeFile(resolve(scriptsDirectory, "generate-posts.mjs"), `import { writeFile } from "node:fs/promises";
-await writeFile(new URL("../generated.marker", import.meta.url), "generated", "utf8");
+  await writeFile(resolve(scriptsDirectory, "generate-posts.mjs"), `import { readFile, writeFile } from "node:fs/promises";
+const marker = new URL("../generated.marker", import.meta.url);
+let count = 0;
+try { count = Number(await readFile(marker, "utf8")); } catch {}
+await writeFile(marker, String(count + 1), "utf8");
 `, "utf8");
 
   let middleware;
@@ -73,6 +76,19 @@ async function requestLocalGenerate(middleware, { host = "localhost:3000", metho
     },
   };
   await middleware({ headers: { host, origin }, method, url: "/api/local-content-generate" }, response, () => {});
+  return { body: JSON.parse(body), status: response.statusCode };
+}
+
+async function requestLocalPosts(middleware, { host = "localhost:3000", origin = "http://localhost:3000" } = {}) {
+  let body = "";
+  const response = {
+    statusCode: 200,
+    setHeader() {},
+    end(chunk = "") {
+      body += chunk;
+    },
+  };
+  await middleware({ headers: { host, origin }, method: "GET", url: "/api/local-post" }, response, () => {});
   return { body: JSON.parse(body), status: response.statusCode };
 }
 
@@ -138,10 +154,11 @@ test("supports editing and updating existing articles", async () => {
 
   assert.match(page, /articleId\?: string/);
   assert.match(page, /const editArticle = \(article: Article\)/);
-  assert.match(page, /localArticles\.filter\(\(item\) => item\.id !== article\.id/);
+  assert.doesNotMatch(page, /localArticles|corner-posts|corner-draft|localStorage/);
   assert.match(page, /onEdit=\{editArticle\}/);
   assert.match(page, />编辑文章<\/button>/);
-  assert.match(page, /draft\.articleId \? "保存修改" : "发布到本机"/);
+  assert.match(page, /draft\.articleId \? "保存修改" : "保存文章"/);
+  assert.match(page, /onClick=\{saveMarkdownToProject\}/);
   assert.match(page, /normalizeSlug\(draft\.title\) !== normalizeSlug\(draft\.slug\)/);
   assert.match(page, /标题与 Slug 不同：文章列表将显示标题，链接将继续使用此 Slug。/);
   assert.match(styles, /\.editor-meta \.slug-hint\s*\{/);
@@ -157,12 +174,12 @@ test("keeps author controls local and hides them from public readers", async () 
   assert.match(page, /function localEditorAvailable\(\)/);
   assert.match(page, /\["localhost", "127\.0\.0\.1", "::1", "\[::1\]"\]/);
   assert.match(page, /editorEnabled && \(/);
-  assert.match(page, /<button className="sync-link"/);
+  assert.doesNotMatch(page, /className="sync-link"/);
   assert.match(page, /<a className="editor-link"/);
   assert.match(page, /view\.name === "editor" && editorEnabled/);
   assert.match(page, /canEdit && <button type="button" onClick=\{\(\) => onEdit\(article\)\}>编辑文章<\/button>/);
   assert.match(page, /if \(!localEditorAvailable\(\)\) \{/);
-  assert.match(page, /if \(!draftReady \|\| !editorEnabled\) return/);
+  assert.match(page, /window\.setInterval\(refreshWhenVisible, 2000\)/);
   assert.match(startScript, /PORT="\$\{PORT:-3000\}"/);
   assert.match(startScript, /BASE_URL="http:\/\/localhost:\$\{PORT\}"/);
   assert.match(startScript, /--hostname localhost/);
@@ -219,25 +236,20 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.match(packageJson, /"prebuild:github": "npm run content:generate"/);
   assert.match(page, /`slug: \$\{JSON\.stringify\(slug\)\}`/);
   assert.match(page, /fetch\("\/api\/local-post"/);
-  assert.match(page, /fetch\("\/api\/local-content-generate"/);
   assert.match(page, /cache: "no-store"/);
   assert.match(page, /setProjectArticles/);
-  assert.match(page, /syncingArticles \? "同步中…" : "同步文章"/);
-  assert.match(page, /setLocalArticles\(\[\]\)/);
-  assert.match(page, /localStorage\.removeItem\("corner-posts"\)/);
-  assert.match(page, /setLocalArticles\(previousLocalArticles\)/);
-  assert.match(page, /localStorage\.setItem\("corner-posts", previousStoredArticles\)/);
-  assert.match(page, /window\.location\.hash = "archive"/);
-  assert.match(page, /已从 content\/posts 同步/);
-  assert.match(page, /保存到文章目录/);
-  assert.match(page, /文章列表已更新/);
-  assert.match(page, /localStorage\.setItem\("corner-draft", JSON\.stringify\(emptyDraft\)\)/);
+  assert.match(page, /const refreshProjectArticles = useCallback/);
+  assert.match(page, /await refreshProjectArticles\(\)/);
+  assert.match(page, /文章以 content\/posts 中的 Markdown 文件为准/);
+  assert.doesNotMatch(page, /localStorage|保存草稿|发布到本机|保存到文章目录/);
   assert.match(localPostsPlugin, /const postRoute = "\/api\/local-post"/);
   assert.match(localPostsPlugin, /const generateRoute = "\/api\/local-content-generate"/);
   assert.match(localPostsPlugin, /isAllowedHost\(request\.headers\.host\)/);
   assert.match(localPostsPlugin, /pathname === generateRoute/);
   assert.match(localPostsPlugin, /articles, count: articles\.length/);
   assert.match(localPostsPlugin, /request\.method === "GET"/);
+  assert.match(localPostsPlugin, /loadPostsFromFiles\(\)/);
+  assert.match(localPostsPlugin, /sourceHash !== generatedSourceHash/);
   assert.match(localPostsPlugin, /article: existingPost\.article/);
   assert.match(localPostsPlugin, /resolve\(projectRoot, "content", "posts"\)/);
   assert.match(localPostsPlugin, /await rename\(temporary, destination\)/);
@@ -248,8 +260,7 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.doesNotMatch(page, /excerpt:\s*draft\.excerpt\.trim\(\) \|\| draft\.content/);
   assert.match(page, /article\.excerpt && <p>\{article\.excerpt\}<\/p>/);
   assert.match(page, /article\.excerpt && <p className="reading-deck">/);
-  assert.match(page, /function removeLegacyAutoExcerpt\(article: Article\)/);
-  assert.match(page, /corner-excerpt-policy/);
+  assert.doesNotMatch(page, /removeLegacyAutoExcerpt|corner-excerpt-policy|local-badge/);
 });
 
 test("regenerates content only through the loopback editor API", async (testContext) => {
@@ -272,7 +283,38 @@ test("regenerates content only through the loopback editor API", async (testCont
   assert.equal(success.status, 200);
   assert.equal(success.body.count, 1);
   assert.equal(success.body.articles[0].id, "fixture");
-  assert.equal(await readFile(marker, "utf8"), "generated");
+  assert.equal(await readFile(marker, "utf8"), "1");
+});
+
+test("keeps local article reads and generated content synchronized with Markdown files", async (testContext) => {
+  const { middleware, projectRoot } = await createLocalApiFixture(testContext);
+  const postPath = resolve(projectRoot, "content", "posts", "fixture.md");
+  const marker = resolve(projectRoot, "generated.marker");
+
+  const first = await requestLocalPosts(middleware);
+  assert.equal(first.status, 200);
+  assert.equal(first.body.articles[0].title, "Fixture");
+  assert.equal(await readFile(marker, "utf8"), "1");
+
+  await writeFile(postPath, `---
+slug: "fixture"
+title: "Updated on disk"
+date: "2026-08-06"
+category: "评论"
+excerpt: ""
+---
+
+Updated body.
+`, "utf8");
+
+  const second = await requestLocalPosts(middleware);
+  assert.equal(second.status, 200);
+  assert.equal(second.body.articles[0].title, "Updated on disk");
+  assert.equal(second.body.articles[0].content, "Updated body.");
+  assert.equal(await readFile(marker, "utf8"), "2");
+
+  await requestLocalPosts(middleware);
+  assert.equal(await readFile(marker, "utf8"), "2");
 });
 
 test("keeps AI summarization local to the development editor", async () => {

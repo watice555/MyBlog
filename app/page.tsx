@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import ReactMarkdown from "react-markdown";
 import { generatedPosts } from "./generated-posts";
 
@@ -12,7 +12,6 @@ type Article = {
   date: string;
   readTime: string;
   content: string;
-  local?: boolean;
 };
 
 type Draft = {
@@ -109,18 +108,6 @@ function readTime(text: string) {
   return `${Math.max(1, Math.ceil(text.replace(/\s/g, "").length / 400))} 分钟`;
 }
 
-function removeLegacyAutoExcerpt(article: Article) {
-  const oldAutomaticExcerpt = article.content.trim().slice(0, 76);
-  return article.excerpt === oldAutomaticExcerpt
-    ? { ...article, excerpt: "" }
-    : article;
-}
-
-function upsertArticle(articles: Article[], article: Article) {
-  return [article, ...articles.filter((item) => item.id !== article.id)]
-    .sort((left, right) => right.date.localeCompare(left.date));
-}
-
 function Markdown({ source }: { source: string }) {
   return (
     <div className="prose">
@@ -131,14 +118,11 @@ function Markdown({ source }: { source: string }) {
 
 export default function Home() {
   const [view, setView] = useState<View>({ name: "home" });
-  const [localArticles, setLocalArticles] = useState<Article[]>([]);
   const [projectArticles, setProjectArticles] = useState<Article[]>(repositoryArticles);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [draftReady, setDraftReady] = useState(false);
   const [toast, setToast] = useState("");
   const [summarizing, setSummarizing] = useState(false);
   const [savingMarkdown, setSavingMarkdown] = useState(false);
-  const [syncingArticles, setSyncingArticles] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -156,13 +140,7 @@ export default function Home() {
     () => false,
   );
 
-  const articles = useMemo(() => {
-    const localIds = new Set(localArticles.map((article) => article.id));
-    return [
-      ...localArticles,
-      ...projectArticles.filter((article) => !localIds.has(article.id)),
-    ];
-  }, [localArticles, projectArticles]);
+  const articles = projectArticles;
 
   const categories = useMemo(
     () => Array.from(new Set(articles.map((article) => article.category))).filter(Boolean),
@@ -189,111 +167,47 @@ export default function Home() {
     setSelectedCategory("");
   };
 
+  const refreshProjectArticles = useCallback(async () => {
+    const response = await fetch("/api/local-post", { cache: "no-store" });
+    if (!response.ok) throw new Error("无法从 content/posts 读取文章");
+    const result = await response.json() as PostListResponse;
+    if (!Array.isArray(result.articles)) throw new Error("本机文章服务返回的数据无效");
+    setProjectArticles(result.articles);
+    return result;
+  }, []);
+
   useEffect(() => {
     const syncRoute = () => setView(routeFromHash());
     syncRoute();
     window.addEventListener("hashchange", syncRoute);
 
-    const loadFrame = window.requestAnimationFrame(() => {
-      if (!localEditorAvailable()) {
-        setDraftReady(true);
-        return;
-      }
-      void fetch("/api/local-post", { cache: "no-store" })
-        .then(async (response) => {
-          if (!response.ok) return;
-          const result = await response.json() as PostListResponse;
-          if (Array.isArray(result.articles)) setProjectArticles(result.articles);
-        })
-        .catch(() => {
-          // Keep the generated article snapshot when the local writer is unavailable.
+    if (!localEditorAvailable()) {
+      return () => window.removeEventListener("hashchange", syncRoute);
+    }
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshProjectArticles().catch(() => {
+          // Keep the last valid file snapshot while an external edit is incomplete.
         });
-      try {
-        const storedArticles = JSON.parse(localStorage.getItem("corner-posts") || "[]");
-        const storedDraft = JSON.parse(localStorage.getItem("corner-draft") || "null");
-        if (Array.isArray(storedArticles)) {
-          const needsExcerptMigration = localStorage.getItem("corner-excerpt-policy") !== "manual-only";
-          const nextArticles = needsExcerptMigration
-            ? storedArticles.map(removeLegacyAutoExcerpt)
-            : storedArticles;
-          setLocalArticles(nextArticles);
-          if (needsExcerptMigration) {
-            localStorage.setItem("corner-posts", JSON.stringify(nextArticles));
-            localStorage.setItem("corner-excerpt-policy", "manual-only");
-          }
-        }
-        if (storedDraft) {
-          const isLegacyPlaceholder =
-            storedDraft.content === "从这里开始写下今天的想法……" &&
-            !storedDraft.title &&
-            !storedDraft.excerpt;
-          setDraft({
-            ...emptyDraft,
-            ...storedDraft,
-            content: isLegacyPlaceholder ? "" : storedDraft.content,
-          });
-        }
-      } catch {
-        // Ignore malformed local data and keep the starter content available.
-      } finally {
-        setDraftReady(true);
       }
-    });
+    };
+    refreshWhenVisible();
+    const refreshInterval = window.setInterval(refreshWhenVisible, 2000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
-      window.cancelAnimationFrame(loadFrame);
+      window.clearInterval(refreshInterval);
       window.removeEventListener("hashchange", syncRoute);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, []);
-
-  useEffect(() => {
-    if (!draftReady || !editorEnabled) return;
-    localStorage.setItem("corner-draft", JSON.stringify(draft));
-  }, [draft, draftReady, editorEnabled]);
+  }, [refreshProjectArticles]);
 
   const notify = (message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(""), 2200);
-  };
-
-  const publishLocal = () => {
-    if (!draft.title.trim() || !draft.content.trim()) {
-      notify("请先写下标题和正文");
-      return;
-    }
-
-    const resolvedSlug = normalizeSlug(draft.articleId || draft.slug || draft.title);
-    if (!resolvedSlug) {
-      notify("请填写有效的 slug");
-      return;
-    }
-    if (!draft.articleId && articles.some((article) => article.id === resolvedSlug)) {
-      notify("这个 slug 已被其他文章使用");
-      return;
-    }
-
-    const editingArticle = draft.articleId
-      ? articles.find((article) => article.id === draft.articleId)
-      : undefined;
-    const article: Article = {
-      id: resolvedSlug,
-      title: draft.title.trim(),
-      excerpt: draft.excerpt.trim(),
-      category: draft.category.trim() || "评论",
-      date: draft.originalDate || editingArticle?.date || formatDate(new Date()),
-      readTime: readTime(draft.content),
-      content: draft.content,
-      local: true,
-    };
-    const next = [
-      article,
-      ...localArticles.filter((item) => item.id !== article.id && item.id !== draft.articleId),
-    ];
-    setLocalArticles(next);
-    localStorage.setItem("corner-posts", JSON.stringify(next));
-    notify(draft.articleId ? "文章修改已保存" : "已发布到这台设备");
-    setDraft({ ...emptyDraft });
-    window.location.hash = `article/${encodeURIComponent(article.id)}`;
   };
 
   const editArticle = (article: Article) => {
@@ -320,51 +234,6 @@ export default function Home() {
     if (hasDraft && !window.confirm("开始新文章会清空当前编辑内容，是否继续？")) return;
     setDraft({ ...emptyDraft });
     window.location.hash = "editor";
-  };
-
-  const saveDraft = () => {
-    localStorage.setItem("corner-draft", JSON.stringify(draft));
-    notify("草稿已保存在浏览器中");
-  };
-
-  const syncArticles = async () => {
-    const previousLocalArticles = localArticles;
-    const previousStoredArticles = localStorage.getItem("corner-posts");
-    setSyncingArticles(true);
-    setLocalArticles([]);
-    localStorage.removeItem("corner-posts");
-    try {
-      const response = await fetch("/api/local-content-generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-      });
-      const responseText = await response.text();
-      let result: PostListResponse = {};
-      try {
-        result = JSON.parse(responseText) as PostListResponse;
-      } catch {
-        if (response.status === 404) {
-          throw new Error("本机内容生成服务未启动，请重启 npm run dev");
-        }
-        throw new Error("本机内容生成服务返回了无法识别的响应");
-      }
-      if (!response.ok || !result.articles) {
-        throw new Error(result.error || "文章列表生成失败");
-      }
-      setProjectArticles(result.articles);
-      clearArchiveFilters();
-      window.location.hash = "archive";
-      notify(`已从 content/posts 同步 ${result.count ?? result.articles.length} 篇文章`);
-    } catch (error) {
-      setLocalArticles(previousLocalArticles);
-      if (previousStoredArticles) {
-        localStorage.setItem("corner-posts", previousStoredArticles);
-      }
-      notify(error instanceof Error ? error.message : "文章列表生成失败");
-    } finally {
-      setSyncingArticles(false);
-    }
   };
 
   const summarizeDraft = async () => {
@@ -512,16 +381,12 @@ export default function Home() {
         }
         throw new Error("本机文章保存服务返回了无法识别的响应");
       }
-      const syncedArticle = result.article;
-      if (syncedArticle) {
-        setProjectArticles((current) => upsertArticle(current, syncedArticle));
-      }
       if (!response.ok || !result.filename) {
         throw new Error(result.error || "Markdown 保存失败");
       }
+      await refreshProjectArticles();
       setDraft({ ...emptyDraft });
-      localStorage.setItem("corner-draft", JSON.stringify(emptyDraft));
-      notify(`已保存到 content/posts/${result.filename}，文章列表已更新`);
+      notify(`已写入 content/posts/${result.filename}`);
       window.location.hash = `article/${encodeURIComponent(slug)}`;
     } catch (error) {
       notify(error instanceof Error ? error.message : "Markdown 保存失败");
@@ -544,12 +409,7 @@ export default function Home() {
           <a className={activeNav === "archive" ? "active" : ""} href="#archive">文章</a>
           <a className={activeNav === "about" ? "active" : ""} href="#about">关于</a>
           {editorEnabled && (
-            <>
-              <button className="sync-link" type="button" onClick={syncArticles} disabled={syncingArticles}>
-                {syncingArticles ? "同步中…" : "同步文章"} <span aria-hidden="true">↻</span>
-              </button>
-              <a className="editor-link" href="#editor">写文章 <span aria-hidden="true">↗</span></a>
-            </>
+            <a className="editor-link" href="#editor">写文章 <span aria-hidden="true">↗</span></a>
           )}
         </nav>
       </header>
@@ -683,14 +543,12 @@ export default function Home() {
               </div>
               <div className="editor-actions">
                 {draft.articleId && <button className="secondary-button" type="button" onClick={startNewDraft}>新建文章</button>}
-                <button className="secondary-button" type="button" onClick={saveDraft}>保存草稿</button>
-                <button className="secondary-button" type="button" onClick={saveMarkdownToProject} disabled={savingMarkdown}>
-                  {savingMarkdown ? "正在保存…" : "保存到文章目录"}
+                <button className="primary-button" type="button" onClick={saveMarkdownToProject} disabled={savingMarkdown}>
+                  {savingMarkdown ? "正在保存…" : draft.articleId ? "保存修改" : "保存文章"}
                 </button>
-                <button className="primary-button" type="button" onClick={publishLocal}>{draft.articleId ? "保存修改" : "发布到本机"}</button>
               </div>
             </div>
-            <p className="editor-tip">{draft.articleId ? "正在编辑已发布文章；保存后会直接更新 content/posts 中对应的 Markdown 文件。" : "支持 Markdown。保存后会直接写入 content/posts，并自动更新文章列表。"}</p>
+            <p className="editor-tip">文章以 content/posts 中的 Markdown 文件为准；网页保存和直接修改文件会更新同一份内容。</p>
             <div className="editor-meta">
               <label>
                 <span>标题</span>
@@ -795,7 +653,6 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         <div className="article-overline">
           <span>{article.category}</span>
           <span>{article.date}</span>
-          {article.local && <span className="local-badge">本机</span>}
         </div>
         <h3><a href={`#article/${encodeURIComponent(article.id)}`}>{article.title}</a></h3>
         {article.excerpt && <p>{article.excerpt}</p>}

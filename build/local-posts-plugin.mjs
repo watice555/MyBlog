@@ -205,6 +205,17 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
   const postsDirectory = resolve(projectRoot, "content", "posts");
   const publicDirectory = resolve(projectRoot, "public");
   const generatorPath = resolve(projectRoot, "scripts", "generate-posts.mjs");
+  let generatedSourceHash = "";
+
+  async function loadPostsFromFiles({ forceGenerate = false } = {}) {
+    const articles = await listPosts(postsDirectory);
+    const sourceHash = createHash("sha256").update(JSON.stringify(articles)).digest("hex");
+    if (forceGenerate || sourceHash !== generatedSourceHash) {
+      await execFileAsync(process.execPath, [generatorPath], { cwd: projectRoot });
+      generatedSourceHash = sourceHash;
+    }
+    return articles;
+  }
 
   return {
     name: "local-post-writer",
@@ -228,8 +239,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
           }
           try {
             await mkdir(postsDirectory, { recursive: true });
-            await execFileAsync(process.execPath, [generatorPath], { cwd: projectRoot });
-            const articles = await listPosts(postsDirectory);
+            const articles = await loadPostsFromFiles({ forceGenerate: true });
             sendJson(response, 200, { articles, count: articles.length });
           } catch (error) {
             const message = error instanceof Error ? error.message : "文章列表生成失败";
@@ -253,7 +263,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
         if (request.method === "GET") {
           try {
             await mkdir(postsDirectory, { recursive: true });
-            sendJson(response, 200, { articles: await listPosts(postsDirectory) });
+            sendJson(response, 200, { articles: await loadPostsFromFiles() });
           } catch (error) {
             const message = error instanceof Error ? error.message : "文章列表读取失败";
             sendJson(response, 500, { error: message });
@@ -297,7 +307,9 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
           await writeFile(temporary, markdown, "utf8");
           await rename(temporary, destination);
           try {
-            await execFileAsync(process.execPath, [generatorPath], { cwd: projectRoot });
+            const articles = await loadPostsFromFiles();
+            const savedArticle = articles.find((item) => item.id === slug) || article;
+            sendJson(response, 200, { filename, article: savedArticle });
           } catch (error) {
             if (existingPost) {
               const rollback = resolve(postsDirectory, `.${slug}.${process.pid}.rollback.tmp`);
@@ -306,9 +318,9 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
             } else {
               await unlink(destination);
             }
+            generatedSourceHash = "";
             throw error;
           }
-          sendJson(response, 200, { filename, article });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Markdown 保存失败";
           sendJson(response, 500, { error: message });

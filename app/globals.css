@@ -156,8 +156,7 @@ textarea:focus-visible {
   transform: scaleX(1);
 }
 
-.editor-link,
-.sync-link {
+.editor-link {
   min-height: 42px;
   padding: 0 16px;
   display: inline-flex;
@@ -176,25 +175,10 @@ textarea:focus-visible {
   color: var(--paper);
 }
 
-.sync-link {
-  background: transparent;
-  color: var(--ink);
-}
-
 .editor-link:hover {
   background: var(--green);
   color: var(--paper);
   transform: translateY(-2px);
-}
-
-.sync-link:hover:not(:disabled) {
-  background: var(--sage);
-  transform: translateY(-2px);
-}
-
-.sync-link:disabled {
-  cursor: wait;
-  opacity: 0.55;
 }
 
 .hero {
@@ -377,12 +361,6 @@ textarea:focus-visible {
 .article-overline span:first-child {
   color: var(--green);
   font-weight: 700;
-}
-
-.local-badge {
-  padding: 2px 7px;
-  border: 1px solid rgba(49, 92, 72, 0.25);
-  border-radius: 10px;
 }
 
 .article-body h3 {
@@ -1180,14 +1158,9 @@ textarea:focus-visible {
     padding: 3px 0;
   }
 
-  .editor-link,
-  .sync-link {
+  .editor-link {
     min-height: 30px;
     padding: 4px 8px;
-  }
-
-  .sync-link {
-    grid-column: 2;
   }
 
   .hero {
