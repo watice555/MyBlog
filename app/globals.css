@@ -586,18 +586,9 @@ textarea:focus-visible {
 }
 
 .about-grid {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 630px);
-  gap: 80px;
+  max-width: 630px;
   padding-top: 48px;
   border-top: 1px solid var(--ink);
-}
-
-.about-number {
-  color: var(--coral);
-  font-family: Georgia, serif;
-  font-size: 72px;
-  font-style: italic;
 }
 
 .about-copy.contact-line,
@@ -1102,11 +1093,6 @@ textarea:focus-visible {
     gap: 48px;
   }
 
-  .about-grid {
-    grid-template-columns: 120px 1fr;
-    gap: 40px;
-  }
-
   .editor-topbar {
     align-items: start;
     flex-direction: column;
@@ -1229,15 +1215,6 @@ textarea:focus-visible {
   .category-options button {
     min-height: 36px;
     padding: 0 13px;
-  }
-
-  .about-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .about-number {
-    font-size: 44px;
   }
 
   .reading-page {

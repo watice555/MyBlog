@@ -522,7 +522,6 @@ export default function Home() {
           <section className="inner-page about-page">
             <PageIntro label="ABOUT WATICE" title="关于凝泠" text="在快速变化的世界里，保持冷静、清澈而诚实的观察。" />
             <div className="about-grid">
-              <div className="about-number">01</div>
               <div className="about-copy prose">
                 <p>你好，我是 watice。这里主要写金融、科技，以及它们与商业、社会和个人选择的交汇。</p>
                 <p>“凝”是停下来凝视与沉淀，“泠”是清澈而冷静。这个名字提醒我：面对快速变化的市场与技术，先看清事实，再形成判断。</p>

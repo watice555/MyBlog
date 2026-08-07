@@ -204,6 +204,18 @@ test("offers public article search and category filtering", async () => {
   assert.match(styles, /\.category-options button\.active\s*\{/);
 });
 
+test("keeps the about page focused on the written introduction", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /title="关于凝泠"/);
+  assert.doesNotMatch(page, /about-number|>01<\/div>/);
+  assert.match(styles, /\.about-grid\s*\{[\s\S]*?max-width:\s*630px/);
+  assert.doesNotMatch(styles, /\.about-number\s*\{/);
+});
+
 test("generates the article list from Markdown Front Matter", async () => {
   const [page, packageJson, generator, generated, localPostsPlugin, filenames] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
