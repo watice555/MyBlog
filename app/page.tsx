@@ -54,7 +54,8 @@ type ImageSaveResponse = {
 };
 
 type View =
-  | { name: "home" | "archive" | "about" | "editor" }
+  | { name: "home" | "archive" | "about" }
+  | { name: "editor"; id?: string }
   | { name: "article"; id: string };
 
 const repositoryArticles: Article[] = generatedPosts.map((article) => ({ ...article }));
@@ -83,11 +84,16 @@ function routeFromHash(): View {
   if (value.startsWith("article/")) {
     return { name: "article", id: decodeURIComponent(value.slice(8)) };
   }
+  if (value.startsWith("editor/")) {
+    return localEditorAvailable()
+      ? { name: "editor", id: decodeURIComponent(value.slice(7)) }
+      : { name: "home" };
+  }
   if (value === "editor") {
     return localEditorAvailable() ? { name: "editor" } : { name: "home" };
   }
   if (["archive", "about"].includes(value)) {
-    return { name: value as "archive" | "about" | "editor" };
+    return { name: value as "archive" | "about" };
   }
   return { name: "home" };
 }
@@ -121,6 +127,19 @@ function Markdown({ source }: { source: string }) {
       <ReactMarkdown>{source}</ReactMarkdown>
     </div>
   );
+}
+
+function draftFromArticle(article: Article): Draft {
+  return {
+    articleId: article.id,
+    originalDate: article.date,
+    slug: article.id,
+    title: article.title,
+    excerpt: article.excerpt,
+    category: article.category,
+    aiParticipation: article.aiParticipation,
+    content: article.content,
+  };
 }
 
 export default function Home() {
@@ -212,6 +231,20 @@ export default function Home() {
     };
   }, [refreshProjectArticles]);
 
+  useEffect(() => {
+    const restoreEditorDraft = () => {
+      const currentView = routeFromHash();
+      if (currentView.name !== "editor" || !currentView.id) return;
+      const article = articles.find((candidate) => candidate.id === currentView.id);
+      if (!article) return;
+      setDraft((current) => current.articleId === article.id ? current : draftFromArticle(article));
+    };
+
+    restoreEditorDraft();
+    window.addEventListener("hashchange", restoreEditorDraft);
+    return () => window.removeEventListener("hashchange", restoreEditorDraft);
+  }, [articles]);
+
   const notify = (message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(""), 2200);
@@ -224,17 +257,8 @@ export default function Home() {
     );
     if (hasOtherDraft && !window.confirm("打开这篇文章会替换当前草稿，是否继续？")) return;
 
-    setDraft({
-      articleId: article.id,
-      originalDate: article.date,
-      slug: article.id,
-      title: article.title,
-      excerpt: article.excerpt,
-      category: article.category,
-      aiParticipation: article.aiParticipation,
-      content: article.content,
-    });
-    window.location.hash = "editor";
+    setDraft(draftFromArticle(article));
+    window.location.hash = `editor/${encodeURIComponent(article.id)}`;
   };
 
   const startNewDraft = () => {

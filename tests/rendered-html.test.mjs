@@ -155,6 +155,12 @@ test("supports editing and updating existing articles", async () => {
 
   assert.match(page, /articleId\?: string/);
   assert.match(page, /const editArticle = \(article: Article\)/);
+  assert.match(page, /value\.startsWith\("editor\/"\)/);
+  assert.match(page, /\{ name: "editor", id: decodeURIComponent\(value\.slice\(7\)\) \}/);
+  assert.match(page, /window\.location\.hash = `editor\/\$\{encodeURIComponent\(article\.id\)\}`/);
+  assert.match(page, /const restoreEditorDraft = \(\) =>/);
+  assert.match(page, /articles\.find\(\(candidate\) => candidate\.id === currentView\.id\)/);
+  assert.match(page, /current\.articleId === article\.id \? current : draftFromArticle\(article\)/);
   assert.doesNotMatch(page, /localArticles|corner-posts|corner-draft|localStorage/);
   assert.match(page, /onEdit=\{editArticle\}/);
   assert.match(page, />编辑文章<\/button>/);
