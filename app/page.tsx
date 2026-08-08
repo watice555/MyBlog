@@ -33,8 +33,9 @@ type Draft = {
   content: string;
 };
 
-type SummaryResponse = {
+type LocalAiResponse = {
   summary?: string;
+  suggestions?: string;
   provider?: string;
   error?: string;
 };
@@ -170,6 +171,8 @@ export default function Home() {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [toast, setToast] = useState("");
   const [summarizing, setSummarizing] = useState(false);
+  const [proofreading, setProofreading] = useState(false);
+  const [proofreadingSuggestions, setProofreadingSuggestions] = useState("");
   const [savingMarkdown, setSavingMarkdown] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -280,6 +283,7 @@ export default function Home() {
     if (hasOtherDraft && !window.confirm("打开这篇文章会替换当前草稿，是否继续？")) return;
 
     setDraft(draftFromArticle(article));
+    setProofreadingSuggestions("");
     window.location.hash = `editor/${encodeURIComponent(article.id)}`;
   };
 
@@ -287,7 +291,32 @@ export default function Home() {
     const hasDraft = Boolean(draft.title.trim() || draft.excerpt.trim() || draft.content.trim());
     if (hasDraft && !window.confirm("开始新文章会清空当前编辑内容，是否继续？")) return;
     setDraft({ ...emptyDraft });
+    setProofreadingSuggestions("");
     window.location.hash = "editor";
+  };
+
+  const requestLocalAi = async (task: "summary" | "proofread") => {
+    const response = await fetch("/api/local-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task,
+        title: draft.title.trim(),
+        content: draft.content.trim(),
+      }),
+    });
+    const responseText = await response.text();
+    let result: LocalAiResponse = {};
+    try {
+      result = JSON.parse(responseText) as LocalAiResponse;
+    } catch {
+      if (response.status === 404) {
+        throw new Error("本机文字助手服务未启动，请重启 npm run dev");
+      }
+      throw new Error("本机文字助手返回了无法识别的响应");
+    }
+    if (!response.ok) throw new Error(result.error || "本机文字助手调用失败");
+    return result;
   };
 
   const summarizeDraft = async () => {
@@ -298,33 +327,34 @@ export default function Home() {
 
     setSummarizing(true);
     try {
-      const response = await fetch("/api/local-summary", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: draft.title.trim(),
-          content: draft.content.trim(),
-        }),
-      });
-      const responseText = await response.text();
-      let result: SummaryResponse = {};
-      try {
-        result = JSON.parse(responseText) as SummaryResponse;
-      } catch {
-        if (response.status === 404) {
-          throw new Error("本机摘要服务未启动，请重启 npm run dev");
-        }
-        throw new Error("本机摘要服务返回了无法识别的响应");
-      }
-      if (!response.ok || !result.summary) {
-        throw new Error(result.error || "智能总结失败");
-      }
+      const result = await requestLocalAi("summary");
+      if (!result.summary) throw new Error("本机模型没有返回摘要");
       setDraft((current) => ({ ...current, excerpt: result.summary || "" }));
       notify(`${result.provider || "本机模型"} 已生成摘要`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "智能总结失败");
     } finally {
       setSummarizing(false);
+    }
+  };
+
+  const proofreadDraft = async () => {
+    if (!draft.content.trim()) {
+      notify("请先写下正文");
+      return;
+    }
+
+    setProofreading(true);
+    setProofreadingSuggestions("");
+    try {
+      const result = await requestLocalAi("proofread");
+      if (!result.suggestions) throw new Error("本机模型没有返回检查建议");
+      setProofreadingSuggestions(result.suggestions);
+      notify(`${result.provider || "本机模型"} 已完成文字检查`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "文字检查失败");
+    } finally {
+      setProofreading(false);
     }
   };
 
@@ -640,17 +670,42 @@ export default function Home() {
                 />
               </label>
             </div>
+            {proofreadingSuggestions && (
+              <section className="proofreading-panel" aria-live="polite">
+                <div className="proofreading-heading">
+                  <div>
+                    <p className="section-kicker">AI PROOFREADING</p>
+                    <h2>文字检查建议</h2>
+                  </div>
+                  <button type="button" onClick={() => setProofreadingSuggestions("")} aria-label="关闭文字检查建议">关闭</button>
+                </div>
+                <Markdown source={proofreadingSuggestions} />
+                <p className="proofreading-note">检查结果仅供参考，不会自动改动正文。</p>
+              </section>
+            )}
             <div className="editor-workspace">
               <section className="writing-pane">
                 <div className="writing-toolbar">
                   <span className="pane-label">MARKDOWN</span>
-                  <button
-                    type="button"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={uploadingImage}
-                  >
-                    {uploadingImage ? "正在保存图片…" : "＋ 插入图片"}
-                  </button>
+                  <div className="writing-tools">
+                    {localAiEnabled && (
+                      <button
+                        type="button"
+                        onClick={proofreadDraft}
+                        disabled={proofreading}
+                        title="只给修改建议，不会改动正文"
+                      >
+                        {proofreading ? "正在检查…" : "AI 检查语病与错别字"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={uploadingImage}
+                    >
+                      {uploadingImage ? "正在保存图片…" : "＋ 插入图片"}
+                    </button>
+                  </div>
                   <input
                     ref={imageInputRef}
                     className="visually-hidden"
@@ -664,7 +719,17 @@ export default function Home() {
                     }}
                   />
                 </div>
-                <textarea ref={markdownTextareaRef} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="从这里开始写下今天的想法……" aria-label="Markdown 正文" spellCheck="true" />
+                <textarea
+                  ref={markdownTextareaRef}
+                  value={draft.content}
+                  onChange={(event) => {
+                    setDraft({ ...draft, content: event.target.value });
+                    setProofreadingSuggestions("");
+                  }}
+                  placeholder="从这里开始写下今天的想法……"
+                  aria-label="Markdown 正文"
+                  spellCheck="true"
+                />
               </section>
               <section className="preview-pane" aria-label="文章实时预览">
                 <span className="pane-label">PREVIEW</span>

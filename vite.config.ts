@@ -1,10 +1,7 @@
 import vinext from "vinext";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
+import createLocalLlmPlugin from "./build/local-llm-plugin.mjs";
 import { sites } from "./build/sites-vite-plugin";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
@@ -47,19 +44,14 @@ export default defineConfig(async () => {
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import("@cloudflare/vite-plugin");
   const { default: createLocalPostsPlugin } = await import("./build/local-posts-plugin.mjs");
-  const localLlmPluginPath = resolve(process.cwd(), ".local/llm-summary-plugin.mjs");
-  const localPlugins: Plugin[] = [createLocalPostsPlugin() as Plugin];
-  if (existsSync(localLlmPluginPath)) {
-    const { default: createLocalLlmPlugin } = await import(pathToFileURL(localLlmPluginPath).href);
-    localPlugins.push(createLocalLlmPlugin() as Plugin);
-  }
 
   return {
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
     plugins: [
-      ...localPlugins,
+      createLocalPostsPlugin(),
+      createLocalLlmPlugin(),
       vinext(),
       sites(),
       cloudflare({

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { Readable } from "node:stream";
 import test from "node:test";
 import matter from "gray-matter";
+import createLocalLlmPlugin from "../build/local-llm-plugin.mjs";
 import createLocalPostsPlugin from "../build/local-posts-plugin.mjs";
 
 async function render() {
@@ -90,6 +92,64 @@ async function requestLocalPosts(middleware, { host = "localhost:3000", origin =
     },
   };
   await middleware({ headers: { host, origin }, method: "GET", url: "/api/local-post" }, response, () => {});
+  return { body: JSON.parse(body), status: response.statusCode };
+}
+
+async function createLocalLlmFixture(testContext) {
+  const projectRoot = await mkdtemp(resolve(tmpdir(), "watice-local-llm-"));
+  testContext.after(() => rm(projectRoot, { recursive: true, force: true }));
+  await mkdir(resolve(projectRoot, ".local"), { recursive: true });
+  await writeFile(resolve(projectRoot, ".local", "llm-config.json"), JSON.stringify({
+    provider: "local_test",
+    providers: {
+      local_test: {
+        display_name: "本机测试模型",
+        model: "test-model",
+        base_url: "http://127.0.0.1:11434/v1",
+        api_key_required: false,
+      },
+    },
+    max_output_tokens: 180,
+  }), "utf8");
+
+  const upstreamRequests = [];
+  const fetchImpl = async (_url, options) => {
+    const payload = JSON.parse(options.body);
+    upstreamRequests.push(payload);
+    const content = payload.messages[0].content.includes("校对编辑")
+      ? "- 原文“这个问题值得商确”：建议改为“这个问题值得商榷”；原因：错别字。"
+      : "我在这篇文章里梳理本地写作工具如何帮助自己保持清晰表达。";
+    return new Response(JSON.stringify({ choices: [{ message: { content } }] }));
+  };
+
+  let middleware;
+  createLocalLlmPlugin(projectRoot, { fetchImpl }).configureServer({
+    middlewares: {
+      use(handler) {
+        middleware = handler;
+      },
+    },
+  });
+  assert.equal(typeof middleware, "function");
+  return { middleware, upstreamRequests };
+}
+
+async function requestLocalAi(middleware, input, { host = "localhost:3000", origin = "http://localhost:3000" } = {}) {
+  let body = "";
+  const response = {
+    statusCode: 200,
+    setHeader() {},
+    end(chunk = "") {
+      body += chunk;
+    },
+  };
+  const request = Readable.from([Buffer.from(JSON.stringify(input))]);
+  Object.assign(request, {
+    headers: { host, origin },
+    method: "POST",
+    url: "/api/local-summary",
+  });
+  await middleware(request, response, () => {});
   return { body: JSON.parse(body), status: response.statusCode };
 }
 
@@ -385,20 +445,68 @@ Updated body.
   assert.equal(await readFile(marker, "utf8"), "2");
 });
 
-test("keeps AI summarization local to the development editor", async () => {
-  const [page, viteConfig, gitignore] = await Promise.all([
+test("keeps local AI writing tools author-oriented and suggestion-only", async (testContext) => {
+  const [page, viteConfig, localLlmPlugin, gitignore] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
+    readFile(new URL("../build/local-llm-plugin.mjs", import.meta.url), "utf8"),
     readFile(new URL("../.gitignore", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /process\.env\.NODE_ENV === "development"/);
   assert.match(page, /fetch\("\/api\/local-summary"/);
+  assert.match(page, /requestLocalAi\("summary"\)/);
+  assert.match(page, /requestLocalAi\("proofread"\)/);
   assert.match(page, /localAiEnabled && \(/);
-  assert.match(page, /本机摘要服务未启动，请重启 npm run dev/);
-  assert.match(viteConfig, /\.local\/llm-summary-plugin\.mjs/);
-  assert.match(viteConfig, /existsSync\(localLlmPluginPath\)/);
+  assert.match(page, /AI 检查语病与错别字/);
+  assert.match(page, /setProofreadingSuggestions\(result\.suggestions\)/);
+  assert.match(page, /检查结果仅供参考，不会自动改动正文/);
+  assert.match(page, /本机文字助手服务未启动，请重启 npm run dev/);
+  assert.match(viteConfig, /createLocalLlmPlugin from "\.\/build\/local-llm-plugin\.mjs"/);
+  assert.match(viteConfig, /createLocalLlmPlugin\(\)/);
+  assert.match(localLlmPlugin, /作者本人的第一人称视角/);
+  assert.match(localLlmPlugin, /不要使用“作者认为”“作者讨论”等旁观者口吻/);
+  assert.match(localLlmPlugin, /绝对不要重写或修改原文/);
+  assert.match(localLlmPlugin, /只给逐条建议/);
+  assert.match(localLlmPlugin, /isAllowedHost\(request\.headers\.host\)/);
+  assert.match(localLlmPlugin, /resolve\(projectRoot, "\.local", "llm-config\.json"\)/);
   assert.match(gitignore, /^\/\.local\/$/m);
+
+  const { middleware, upstreamRequests } = await createLocalLlmFixture(testContext);
+  const summary = await requestLocalAi(middleware, {
+    task: "summary",
+    title: "写作工具",
+    content: "正文内容。",
+  });
+  assert.equal(summary.status, 200);
+  assert.match(summary.body.summary, /^我在这篇文章里/);
+  assert.equal(summary.body.provider, "本机测试模型");
+  assert.equal(upstreamRequests[0].max_tokens, 180);
+  assert.match(upstreamRequests[0].messages[0].content, /第一人称视角/);
+
+  const proofreading = await requestLocalAi(middleware, {
+    task: "proofread",
+    title: "写作工具",
+    content: "这个问题值得商确。",
+  });
+  assert.equal(proofreading.status, 200);
+  assert.match(proofreading.body.suggestions, /建议改为“这个问题值得商榷”/);
+  assert.equal(upstreamRequests[1].max_tokens, 1200);
+  assert.match(upstreamRequests[1].messages[0].content, /不要输出修改后的全文/);
+
+  const invalidTask = await requestLocalAi(middleware, {
+    task: "rewrite",
+    content: "不要改写我。",
+  });
+  assert.equal(invalidTask.status, 400);
+  assert.equal(upstreamRequests.length, 2);
+
+  const remoteHost = await requestLocalAi(middleware, {
+    task: "proofread",
+    content: "正文内容。",
+  }, { host: "blog.example.com" });
+  assert.equal(remoteHost.status, 403);
+  assert.equal(upstreamRequests.length, 2);
 });
 
 test("uploads article images into the public post asset directory", async () => {
