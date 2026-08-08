@@ -125,8 +125,15 @@ function readTime(text: string) {
   return `${Math.max(1, Math.ceil(text.replace(/\s/g, "").length / 400))} 分钟`;
 }
 
+function escapeLiteralDollarSigns(source: string) {
+  return source.replace(
+    /(^|[^\\])\$(?=\d|[A-Z][A-Z0-9]{1,}\b)/gm,
+    (_match, prefix: string) => `${prefix}\\$`,
+  );
+}
+
 function normalizeMathDelimiters(source: string) {
-  return source
+  return escapeLiteralDollarSigns(source)
     .replace(/^([ \t]*)\\\[\s*$/gm, (_match, indentation: string) => `${indentation}$$`)
     .replace(/^([ \t]*)\\\]\s*$/gm, (_match, indentation: string) => `${indentation}$$`)
     .replace(/\\\((.+?)\\\)/g, (_match, expression: string) => `$${expression}$`);

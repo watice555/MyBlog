@@ -203,6 +203,9 @@ test("renders GFM tables and mathematical formulas with responsive styles", asyn
   assert.match(page, /remarkPlugins=\{\[remarkGfm, remarkMath\]\}/);
   assert.match(page, /rehypePlugins=\{\[rehypeKatex\]\}/);
   assert.match(page, /normalizeMathDelimiters\(source\)/);
+  assert.match(page, /function escapeLiteralDollarSigns\(source: string\)/);
+  assert.match(page, /\[A-Z\]\[A-Z0-9\]\{1,\}/);
+  assert.match(page, /return escapeLiteralDollarSigns\(source\)/);
   assert.match(page, /className="table-scroll"/);
   assert.match(page, /content:\s*""/);
   assert.match(page, /placeholder="从这里开始写下今天的想法……"/);
