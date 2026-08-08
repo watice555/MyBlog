@@ -245,6 +245,9 @@ test("supports editing and updating existing articles", async () => {
   assert.doesNotMatch(page, /localArticles|corner-posts|corner-draft|localStorage/);
   assert.match(page, /onEdit=\{editArticle\}/);
   assert.match(page, />编辑文章<\/button>/);
+  assert.match(page, /className="reading-topbar"/);
+  assert.equal(page.match(/onClick=\{\(\) => onEdit\(article\)\}>编辑文章<\/button>/g)?.length, 2);
+  assert.doesNotMatch(page, /AI · \$\{label\}/);
   assert.match(page, /draft\.articleId \? "保存修改" : "保存文章"/);
   assert.match(page, /onClick=\{saveMarkdownToProject\}/);
   assert.match(page, /normalizeSlug\(draft\.title\) !== normalizeSlug\(draft\.slug\)/);
@@ -265,7 +268,7 @@ test("keeps author controls local and hides them from public readers", async () 
   assert.doesNotMatch(page, /className="sync-link"/);
   assert.match(page, /<a className="editor-link"/);
   assert.match(page, /view\.name === "editor" && editorEnabled/);
-  assert.match(page, /canEdit && <button type="button" onClick=\{\(\) => onEdit\(article\)\}>编辑文章<\/button>/);
+  assert.equal(page.match(/canEdit && <button type="button" onClick=\{\(\) => onEdit\(article\)\}>编辑文章<\/button>/g)?.length, 2);
   assert.match(page, /if \(!localEditorAvailable\(\)\) \{/);
   assert.match(page, /window\.setInterval\(refreshWhenVisible, 2000\)/);
   assert.match(startScript, /PORT="\$\{PORT:-3000\}"/);
@@ -306,7 +309,9 @@ test("stores numeric AI participation levels and maps them to public labels", as
   assert.match(page, /type="range"/);
   assert.match(page, /aria-valuetext=\{label\}/);
   assert.match(page, /`aiParticipation: \$\{draft\.aiParticipation\}`/);
-  assert.match(page, /<AiParticipationIndicator value=\{article\.aiParticipation\} showPrefix=\{false\} \/>/);
+  assert.match(page, /function AiParticipationIndicator\(\{ value \}: \{ value: AiParticipationLevel \}\)/);
+  assert.match(page, /<span className="ai-participation-indicator" aria-label=\{`AI 参与度：\$\{label\}`\}>\s*\{label\}\s*<\/span>/);
+  assert.doesNotMatch(page, /AI ·/);
   assert.match(styles, /\.ai-slider-control input\s*\{/);
   assert.match(styles, /\.ai-slider-ticks\s*\{/);
   assert.match(styles, /\.ai-participation-indicator\s*\{/);

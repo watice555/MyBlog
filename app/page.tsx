@@ -779,7 +779,7 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         <div className="article-overline">
           <span>{article.category}</span>
           <span>{article.date}</span>
-          <AiParticipationIndicator value={article.aiParticipation} showPrefix={false} />
+          <AiParticipationIndicator value={article.aiParticipation} />
         </div>
         <h3><a href={`#article/${encodeURIComponent(article.id)}`}>{article.title}</a></h3>
         {article.excerpt && <p>{article.excerpt}</p>}
@@ -806,11 +806,11 @@ function aiParticipationLabel(value: AiParticipationLevel) {
   return AI_PARTICIPATION_LABELS[value - 1];
 }
 
-function AiParticipationIndicator({ value, showPrefix = true }: { value: AiParticipationLevel; showPrefix?: boolean }) {
+function AiParticipationIndicator({ value }: { value: AiParticipationLevel }) {
   const label = aiParticipationLabel(value);
   return (
     <span className="ai-participation-indicator" aria-label={`AI 参与度：${label}`}>
-      {showPrefix ? `AI · ${label}` : label}
+      {label}
     </span>
   );
 }
@@ -860,7 +860,10 @@ function ArticlePage({ article, onEdit, canEdit }: { article?: Article; onEdit: 
 
   return (
     <article className="reading-page">
-      <a className="back-link" href="#archive">← 返回文章</a>
+      <div className="reading-topbar">
+        <a className="back-link" href="#archive">← 返回文章</a>
+        {canEdit && <button type="button" onClick={() => onEdit(article)}>编辑文章</button>}
+      </div>
       <header className="reading-header">
         <p className="article-category">{article.category}</p>
         <h1>{article.title}</h1>

@@ -625,11 +625,27 @@ textarea:focus-visible {
   padding: 68px 0 120px;
 }
 
-.back-link {
-  display: inline-block;
+.reading-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 72px;
+}
+
+.back-link {
   color: var(--muted);
   font-size: 13px;
+}
+
+.reading-topbar button {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .reading-header {
@@ -1502,7 +1518,7 @@ textarea:focus-visible {
     padding-top: 44px;
   }
 
-  .back-link {
+  .reading-topbar {
     margin-bottom: 48px;
   }
 
