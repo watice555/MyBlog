@@ -118,7 +118,7 @@ async function createLocalLlmFixture(testContext) {
     upstreamRequests.push(payload);
     const content = payload.messages[0].content.includes("校对编辑")
       ? "- 原文“这个问题值得商确”：建议改为“这个问题值得商榷”；原因：错别字。"
-      : "我在这篇文章里梳理本地写作工具如何帮助自己保持清晰表达。";
+      : "本文梳理本地写作工具如何帮助作者保持清晰表达，并讨论其适用边界。";
     return new Response(JSON.stringify({ choices: [{ message: { content } }] }));
   };
 
@@ -475,7 +475,9 @@ test("keeps local AI writing tools author-oriented and suggestion-only", async (
   assert.match(page, /本机文字助手服务未启动，请重启 npm run dev/);
   assert.match(viteConfig, /createLocalLlmPlugin from "\.\/build\/local-llm-plugin\.mjs"/);
   assert.match(viteConfig, /createLocalLlmPlugin\(\)/);
-  assert.match(localLlmPlugin, /作者本人的第一人称视角/);
+  assert.match(localLlmPlugin, /站在作者本人的立场/);
+  assert.match(localLlmPlugin, /简介必须以“本文”开头/);
+  assert.match(localLlmPlugin, /不要使用“我”“我们”“笔者”/);
   assert.match(localLlmPlugin, /不要使用“作者认为”“作者讨论”等旁观者口吻/);
   assert.match(localLlmPlugin, /绝对不要重写或修改原文/);
   assert.match(localLlmPlugin, /只给逐条建议/);
@@ -490,10 +492,11 @@ test("keeps local AI writing tools author-oriented and suggestion-only", async (
     content: "正文内容。",
   });
   assert.equal(summary.status, 200);
-  assert.match(summary.body.summary, /^我在这篇文章里/);
+  assert.match(summary.body.summary, /^本文/);
   assert.equal(summary.body.provider, "本机测试模型");
   assert.equal(upstreamRequests[0].max_tokens, 180);
-  assert.match(upstreamRequests[0].messages[0].content, /第一人称视角/);
+  assert.match(upstreamRequests[0].messages[0].content, /站在作者本人的立场/);
+  assert.match(upstreamRequests[0].messages[0].content, /简介必须以“本文”开头/);
 
   const proofreading = await requestLocalAi(middleware, {
     task: "proofread",
