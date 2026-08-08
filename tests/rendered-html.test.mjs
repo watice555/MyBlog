@@ -224,6 +224,8 @@ test("renders GFM tables and mathematical formulas with responsive styles", asyn
   assert.match(styles, /\.prose li::marker\s*\{/);
   assert.match(styles, /\.prose \.table-scroll\s*\{/);
   assert.match(styles, /\.prose \.katex-display\s*\{/);
+  assert.match(styles, /\.article-body > p\s*\{[\s\S]*?width:\s*100%/);
+  assert.doesNotMatch(styles, /\.article-body > p\s*\{[\s\S]*?max-width:\s*700px/);
   assert.match(styles, /--serif:\s*"Source Serif 4 Variable", "Songti SC", "STSong"/);
   assert.doesNotMatch(styles, /Georgia/);
   assert.match(layout, /import "katex\/dist\/katex\.min\.css"/);
