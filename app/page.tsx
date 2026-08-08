@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { generatedPosts } from "./generated-posts";
 
 const AI_PARTICIPATION_LABELS = ["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"] as const;
@@ -121,10 +124,29 @@ function readTime(text: string) {
   return `${Math.max(1, Math.ceil(text.replace(/\s/g, "").length / 400))} 分钟`;
 }
 
+function normalizeMathDelimiters(source: string) {
+  return source
+    .replace(/^([ \t]*)\\\[\s*$/gm, (_match, indentation: string) => `${indentation}$$`)
+    .replace(/^([ \t]*)\\\]\s*$/gm, (_match, indentation: string) => `${indentation}$$`)
+    .replace(/\\\((.+?)\\\)/g, (_match, expression: string) => `$${expression}$`);
+}
+
 function Markdown({ source }: { source: string }) {
   return (
     <div className="prose">
-      <ReactMarkdown>{source}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          table: ({ children, ...props }) => (
+            <div className="table-scroll">
+              <table {...props}>{children}</table>
+            </div>
+          ),
+        }}
+      >
+        {normalizeMathDelimiters(source)}
+      </ReactMarkdown>
     </div>
   );
 }

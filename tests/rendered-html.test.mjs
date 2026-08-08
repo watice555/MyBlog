@@ -127,15 +127,22 @@ test("ships GitHub Pages and social metadata", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
 
-test("uses a standard Markdown renderer with emphasis styles", async () => {
-  const [page, styles, packageJson] = await Promise.all([
+test("renders GFM tables and mathematical formulas with responsive styles", async () => {
+  const [page, layout, styles, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /import ReactMarkdown from "react-markdown"/);
-  assert.match(page, /<ReactMarkdown>\{source\}<\/ReactMarkdown>/);
+  assert.match(page, /import remarkGfm from "remark-gfm"/);
+  assert.match(page, /import remarkMath from "remark-math"/);
+  assert.match(page, /import rehypeKatex from "rehype-katex"/);
+  assert.match(page, /remarkPlugins=\{\[remarkGfm, remarkMath\]\}/);
+  assert.match(page, /rehypePlugins=\{\[rehypeKatex\]\}/);
+  assert.match(page, /normalizeMathDelimiters\(source\)/);
+  assert.match(page, /className="table-scroll"/);
   assert.match(page, /content:\s*""/);
   assert.match(page, /placeholder="从这里开始写下今天的想法……"/);
   assert.match(page, /placeholder="用一小段话介绍这篇文章（可选）"/);
@@ -146,10 +153,16 @@ test("uses a standard Markdown renderer with emphasis styles", async () => {
   assert.match(styles, /resize:\s*vertical/);
   assert.match(styles, /\.prose strong\s*\{/);
   assert.match(styles, /\.prose em\s*\{/);
+  assert.match(styles, /\.prose \.table-scroll\s*\{/);
+  assert.match(styles, /\.prose \.katex-display\s*\{/);
   assert.match(styles, /--serif:\s*"Source Serif 4 Variable", "Songti SC", "STSong"/);
   assert.doesNotMatch(styles, /Georgia/);
+  assert.match(layout, /import "katex\/dist\/katex\.min\.css"/);
   assert.match(packageJson, /"@fontsource-variable\/source-serif-4"/);
   assert.match(packageJson, /"react-markdown"/);
+  assert.match(packageJson, /"remark-gfm"/);
+  assert.match(packageJson, /"remark-math"/);
+  assert.match(packageJson, /"rehype-katex"/);
 });
 
 test("supports editing and updating existing articles", async () => {

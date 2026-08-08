@@ -742,6 +742,55 @@ textarea:focus-visible {
   background: transparent;
 }
 
+.prose .table-scroll {
+  max-width: 100%;
+  margin: 2em 0;
+  overflow-x: auto;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  -webkit-overflow-scrolling: touch;
+}
+
+.prose table {
+  width: 100%;
+  min-width: 540px;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.prose th,
+.prose td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose th {
+  background: rgba(220, 230, 221, 0.42);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.prose tr:last-child td {
+  border-bottom: 0;
+}
+
+.prose .katex-display {
+  max-width: 100%;
+  margin: 2em 0;
+  padding: 0.35em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  font-size: 1.05em;
+  -webkit-overflow-scrolling: touch;
+}
+
 .prose img {
   display: block;
   max-width: 100%;
