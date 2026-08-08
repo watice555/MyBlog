@@ -120,6 +120,8 @@ test("ships GitHub Pages and social metadata", async () => {
   ]);
 
   assert.match(layout, /og\.png/);
+  assert.match(layout, /@fontsource-variable\/source-serif-4\/wght\.css/);
+  assert.match(layout, /@fontsource-variable\/source-serif-4\/wght-italic\.css/);
   assert.match(nextConfig, /output:\s*"export"/);
   assert.match(workflow, /actions\/deploy-pages@v4/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
@@ -144,6 +146,9 @@ test("uses a standard Markdown renderer with emphasis styles", async () => {
   assert.match(styles, /resize:\s*vertical/);
   assert.match(styles, /\.prose strong\s*\{/);
   assert.match(styles, /\.prose em\s*\{/);
+  assert.match(styles, /--serif:\s*"Source Serif 4 Variable", "Songti SC", "STSong"/);
+  assert.doesNotMatch(styles, /Georgia/);
+  assert.match(packageJson, /"@fontsource-variable\/source-serif-4"/);
   assert.match(packageJson, /"react-markdown"/);
 });
 

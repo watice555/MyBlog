@@ -9,7 +9,7 @@
   --sage: #dce6dd;
   --coral: #e8664a;
   --line: rgba(30, 41, 35, 0.17);
-  --serif: Georgia, "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  --serif: "Source Serif 4 Variable", "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", serif;
   --sans: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
 
@@ -344,7 +344,7 @@ textarea:focus-visible {
 
 .article-index {
   color: var(--muted);
-  font-family: Georgia, serif;
+  font-family: var(--serif);
   font-size: 12px;
   font-style: italic;
 }
