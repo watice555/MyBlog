@@ -20,7 +20,7 @@ npm run dev
 页面右上角的「写文章」会打开编辑器：
 
 - `content/posts/` 是编辑器唯一的文章数据源，不使用浏览器存储保存草稿或文章副本；
-- 「保存文章」或「保存修改」会把包含 slug、标题、日期、分类和摘要的 Markdown 文件直接写入 `content/posts/`；
+- 「保存文章」或「保存修改」会把包含 slug、标题、日期、分类、AI 参与度和摘要的 Markdown 文件直接写入 `content/posts/`；
 - 本地页面会自动重新读取 `content/posts/`，所以从网页保存和直接修改 Markdown 文件效果相同；
 - 尚未点击保存的输入只存在当前编辑表单，刷新或关闭页面会丢失；
 - 「插入图片」会把图片保存到 `public/images/posts/年/月/`，并在当前光标处自动插入 Markdown 引用；
@@ -42,6 +42,7 @@ slug: "my-first-post"
 title: "我的第一篇文章"
 date: "2026-07-29"
 category: "评论"
+aiParticipation: "纯人工"
 excerpt: "这篇文章的简短摘要。"
 ---
 
@@ -51,6 +52,7 @@ excerpt: "这篇文章的简短摘要。"
 - `slug` 是稳定的文章标识和地址；省略时会使用文件名；
 - `title` 和 `date` 必填，日期必须是 `YYYY-MM-DD`；
 - `category` 默认是「评论」；
+- `aiParticipation` 必填，可选值为「纯人工」「AI辅助」「AI协作」「人类辅助」「纯AI」；
 - `excerpt` 可以省略或留空；留空时文章列表和文章页都不会显示摘要；
 - 阅读时间根据正文长度自动计算；
 - slug 重复、日期错误或正文为空时，构建会给出明确提示并停止。

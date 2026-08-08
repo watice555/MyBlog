@@ -6,6 +6,7 @@ import matter from "gray-matter";
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const postsDirectory = join(projectRoot, "content", "posts");
 const outputFile = join(projectRoot, "app", "generated-posts.ts");
+const aiParticipationLevels = new Set(["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"]);
 
 function normalizeSlug(value) {
   return String(value ?? "")
@@ -38,6 +39,14 @@ function normalizeDate(value, filename) {
     throw new Error(`${filename}: date 不是有效日期`);
   }
   return date;
+}
+
+function normalizeAiParticipation(value, filename) {
+  const level = String(value ?? "").trim();
+  if (!aiParticipationLevels.has(level)) {
+    throw new Error(`${filename}: aiParticipation 必须是纯人工、AI辅助、AI协作、人类辅助或纯AI`);
+  }
+  return level;
 }
 
 function calculateReadTime(content) {
@@ -76,6 +85,7 @@ async function generatePosts() {
       title: requiredText(data.title, "title", filename),
       excerpt,
       category: String(data.category ?? "评论").trim() || "评论",
+      aiParticipation: normalizeAiParticipation(data.aiParticipation, filename),
       date: date.replaceAll("-", "."),
       readTime: calculateReadTime(body),
       content: body,
@@ -89,13 +99,14 @@ async function generatePosts() {
     title: post.title,
     excerpt: post.excerpt,
     category: post.category,
+    aiParticipation: post.aiParticipation,
     date: post.date,
     readTime: post.readTime,
     content: post.content,
   }));
   const output = [
     "// 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。",
-    `export const generatedPosts = ${JSON.stringify(publicPosts, null, 2)};`,
+    `export const generatedPosts = ${JSON.stringify(publicPosts, null, 2)} as const;`,
     "",
   ].join("\n");
 

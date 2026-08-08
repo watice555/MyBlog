@@ -42,6 +42,7 @@ slug: "fixture"
 title: "Fixture"
 date: "2026-08-06"
 category: "评论"
+aiParticipation: "纯人工"
 excerpt: ""
 ---
 
@@ -204,6 +205,27 @@ test("offers public article search and category filtering", async () => {
   assert.match(styles, /\.category-options button\.active\s*\{/);
 });
 
+test("stores and displays a five-level AI participation indicator", async () => {
+  const [page, styles, generator, localPostsPlugin] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/generate-posts.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../build/local-posts-plugin.mjs", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /\["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"\] as const/);
+  assert.match(page, /type="range"/);
+  assert.match(page, /aria-valuetext=\{value\}/);
+  assert.match(page, /aria-pressed=\{label === value\}/);
+  assert.match(page, /`aiParticipation: \$\{JSON\.stringify\(draft\.aiParticipation\)\}`/);
+  assert.match(page, /<AiParticipationIndicator value=\{article\.aiParticipation\} \/>/);
+  assert.match(styles, /\.ai-slider-control input\s*\{/);
+  assert.match(styles, /\.ai-slider-ticks\s*\{/);
+  assert.match(styles, /\.ai-participation-indicator\s*\{/);
+  assert.match(generator, /normalizeAiParticipation\(data\.aiParticipation, filename\)/);
+  assert.match(localPostsPlugin, /const aiParticipation = String\(data\.aiParticipation \?\? ""\)\.trim\(\)/);
+});
+
 test("keeps the about page focused on the written introduction", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
@@ -234,6 +256,7 @@ test("generates the article list from Markdown Front Matter", async () => {
     assert.ok(data.slug);
     assert.ok(data.title);
     assert.match(String(data.date instanceof Date ? data.date.toISOString().slice(0, 10) : data.date), /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"].includes(data.aiParticipation));
     assert.ok(content.trim());
     assert.match(generated, new RegExp(`"id": "${normalizeSlug(data.slug)}"`));
   }
@@ -313,6 +336,7 @@ slug: "fixture"
 title: "Updated on disk"
 date: "2026-08-06"
 category: "评论"
+aiParticipation: "AI协作"
 excerpt: ""
 ---
 
@@ -322,6 +346,7 @@ Updated body.
   const second = await requestLocalPosts(middleware);
   assert.equal(second.status, 200);
   assert.equal(second.body.articles[0].title, "Updated on disk");
+  assert.equal(second.body.articles[0].aiParticipation, "AI协作");
   assert.equal(second.body.articles[0].content, "Updated body.");
   assert.equal(await readFile(marker, "utf8"), "2");
 

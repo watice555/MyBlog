@@ -1,14 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import { generatedPosts } from "./generated-posts";
+
+const AI_PARTICIPATION_LEVELS = ["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"] as const;
+
+type AiParticipation = typeof AI_PARTICIPATION_LEVELS[number];
 
 type Article = {
   id: string;
   title: string;
   excerpt: string;
   category: string;
+  aiParticipation: AiParticipation;
   date: string;
   readTime: string;
   content: string;
@@ -21,6 +26,7 @@ type Draft = {
   title: string;
   excerpt: string;
   category: string;
+  aiParticipation: AiParticipation;
   content: string;
 };
 
@@ -51,13 +57,14 @@ type View =
   | { name: "home" | "archive" | "about" | "editor" }
   | { name: "article"; id: string };
 
-const repositoryArticles: Article[] = generatedPosts;
+const repositoryArticles: Article[] = generatedPosts.map((article) => ({ ...article }));
 
 const emptyDraft: Draft = {
   slug: "",
   title: "",
   excerpt: "",
   category: "评论",
+  aiParticipation: "纯人工",
   content: "",
 };
 
@@ -224,6 +231,7 @@ export default function Home() {
       title: article.title,
       excerpt: article.excerpt,
       category: article.category,
+      aiParticipation: article.aiParticipation,
       content: article.content,
     });
     window.location.hash = "editor";
@@ -355,6 +363,7 @@ export default function Home() {
       `title: ${JSON.stringify(draft.title.trim())}`,
       `date: ${JSON.stringify(date)}`,
       `category: ${JSON.stringify(draft.category.trim() || "评论")}`,
+      `aiParticipation: ${JSON.stringify(draft.aiParticipation)}`,
       `excerpt: ${JSON.stringify(draft.excerpt.trim())}`,
       "---",
       "",
@@ -564,6 +573,10 @@ export default function Home() {
                 <span>分类</span>
                 <input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="评论" />
               </label>
+              <AiParticipationSlider
+                value={draft.aiParticipation}
+                onChange={(aiParticipation) => setDraft({ ...draft, aiParticipation })}
+              />
               <label className="excerpt-field">
                 <span className="excerpt-label">
                   <span>摘要</span>
@@ -612,7 +625,10 @@ export default function Home() {
                 <article>
                   <p className="article-category">{draft.category || "未分类"}</p>
                   <h1>{draft.title || "未命名的文章"}</h1>
-                  <div className="article-meta">{draft.originalDate || formatDate(new Date())} · {readTime(draft.content)}</div>
+                  <div className="article-meta">
+                    <span>{draft.originalDate || formatDate(new Date())} · {readTime(draft.content)}</span>
+                    <AiParticipationIndicator value={draft.aiParticipation} />
+                  </div>
                   <Markdown source={draft.content} />
                 </article>
               </section>
@@ -652,6 +668,7 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         <div className="article-overline">
           <span>{article.category}</span>
           <span>{article.date}</span>
+          <AiParticipationIndicator value={article.aiParticipation} />
         </div>
         <h3><a href={`#article/${encodeURIComponent(article.id)}`}>{article.title}</a></h3>
         {article.excerpt && <p>{article.excerpt}</p>}
@@ -674,6 +691,58 @@ function PageIntro({ label, title, text }: { label: string; title: string; text:
   );
 }
 
+function AiParticipationIndicator({ value }: { value: AiParticipation }) {
+  return (
+    <span className="ai-participation-indicator" aria-label={`AI 参与度：${value}`}>
+      AI · {value}
+    </span>
+  );
+}
+
+function AiParticipationSlider({ value, onChange }: { value: AiParticipation; onChange: (value: AiParticipation) => void }) {
+  const level = AI_PARTICIPATION_LEVELS.indexOf(value);
+  const sliderStyle = { "--ai-progress": `${level * 25}%` } as CSSProperties;
+
+  return (
+    <fieldset className="ai-participation-field">
+      <legend className="visually-hidden">AI 参与度</legend>
+      <div className="ai-participation-heading">
+        <span>AI 参与度</span>
+        <strong>{value}</strong>
+      </div>
+      <div className="ai-slider-control">
+        <input
+          type="range"
+          min="0"
+          max="4"
+          step="1"
+          value={level}
+          aria-label="AI 参与度"
+          aria-valuetext={value}
+          style={sliderStyle}
+          onChange={(event) => onChange(AI_PARTICIPATION_LEVELS[Number(event.target.value)] ?? "纯人工")}
+        />
+        <div className="ai-slider-ticks" aria-hidden="true">
+          {AI_PARTICIPATION_LEVELS.map((label) => <span key={label} />)}
+        </div>
+      </div>
+      <div className="ai-slider-labels" aria-label="AI 参与度档位">
+        {AI_PARTICIPATION_LEVELS.map((label) => (
+          <button
+            type="button"
+            className={label === value ? "active" : ""}
+            aria-pressed={label === value}
+            onClick={() => onChange(label)}
+            key={label}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 function ArticlePage({ article, onEdit, canEdit }: { article?: Article; onEdit: (article: Article) => void; canEdit: boolean }) {
   if (!article) {
     return (
@@ -692,7 +761,10 @@ function ArticlePage({ article, onEdit, canEdit }: { article?: Article; onEdit: 
         <p className="article-category">{article.category}</p>
         <h1>{article.title}</h1>
         {article.excerpt && <p className="reading-deck">{article.excerpt}</p>}
-        <div className="article-meta">{article.date} · {article.readTime}</div>
+        <div className="article-meta">
+          <span>{article.date} · {article.readTime}</span>
+          <AiParticipationIndicator value={article.aiParticipation} />
+        </div>
       </header>
       <Markdown source={article.content} />
       <footer className="reading-footer">

@@ -3,6 +3,7 @@ slug: "2026-08-07 合并日报"
 title: "2026-08-07 合并日报"
 date: "2026-08-07"
 category: "日报"
+aiParticipation: "纯人工"
 excerpt: "8月7日市场聚焦AI基建深化与Pre-IPO链上化趋势，OpenAI确立Agent标准，阿里Qwen转向商业化。宏观方面美国就业疲软引发加息博弈，A股存储芯片逆势大涨。加密领域BTC ETF持续流入，但安全事件频发，高收益理财风险上升。"
 ---
 

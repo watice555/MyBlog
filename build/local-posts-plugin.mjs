@@ -168,11 +168,17 @@ function parseArticle(markdown, filename, expectedSlug) {
   const body = content.trim();
   if (!body) throw new Error(`${filename}: Markdown 正文不能为空`);
 
+  const aiParticipation = String(data.aiParticipation ?? "").trim();
+  if (!["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"].includes(aiParticipation)) {
+    throw new Error(`${filename}: aiParticipation 必须是纯人工、AI辅助、AI协作、人类辅助或纯AI`);
+  }
+
   return {
     id,
     title,
     excerpt: String(data.excerpt ?? "").trim(),
     category: String(data.category ?? "评论").trim() || "评论",
+    aiParticipation,
     date: rawDate.replaceAll("-", "."),
     readTime: `${Math.max(1, Math.ceil(body.replace(/\s/g, "").length / 400))} 分钟`,
     content: body,
