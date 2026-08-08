@@ -710,13 +710,40 @@ textarea:focus-visible {
   font-size: 20px;
 }
 
-.prose ul {
+.prose ul,
+.prose ol {
   margin: 0 0 1.7em;
-  padding-left: 1.2em;
+  padding-left: 1.45em;
+}
+
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
 }
 
 .prose li {
   margin: 0.4em 0;
+}
+
+.prose li::marker {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.prose li > ul,
+.prose li > ol {
+  margin: 0.4em 0 0;
+}
+
+.prose ul ul {
+  list-style-type: circle;
+}
+
+.prose ul ul ul {
+  list-style-type: square;
 }
 
 .prose code {

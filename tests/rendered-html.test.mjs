@@ -153,6 +153,9 @@ test("renders GFM tables and mathematical formulas with responsive styles", asyn
   assert.match(styles, /resize:\s*vertical/);
   assert.match(styles, /\.prose strong\s*\{/);
   assert.match(styles, /\.prose em\s*\{/);
+  assert.match(styles, /\.prose ul\s*\{[\s\S]*?list-style:\s*disc/);
+  assert.match(styles, /\.prose ol\s*\{[\s\S]*?list-style:\s*decimal/);
+  assert.match(styles, /\.prose li::marker\s*\{/);
   assert.match(styles, /\.prose \.table-scroll\s*\{/);
   assert.match(styles, /\.prose \.katex-display\s*\{/);
   assert.match(styles, /--serif:\s*"Source Serif 4 Variable", "Songti SC", "STSong"/);
