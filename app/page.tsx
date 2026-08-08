@@ -634,9 +634,15 @@ export default function Home() {
             </div>
             <p className="editor-tip">文章以 content/posts 中的 Markdown 文件为准；网页保存和直接修改文件会更新同一份内容。</p>
             <div className="editor-meta">
-              <label>
+              <label className="title-field">
                 <span>标题</span>
-                <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="给这篇文章一个名字" />
+                <textarea
+                  className="title-input"
+                  value={draft.title}
+                  onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                  placeholder="给这篇文章一个名字"
+                  rows={2}
+                />
               </label>
               <label>
                 <span>Slug（文章地址）</span>
