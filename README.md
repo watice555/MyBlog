@@ -42,7 +42,7 @@ slug: "my-first-post"
 title: "我的第一篇文章"
 date: "2026-07-29"
 category: "评论"
-aiParticipation: "纯人工"
+aiParticipation: 1
 excerpt: "这篇文章的简短摘要。"
 ---
 
@@ -52,7 +52,7 @@ excerpt: "这篇文章的简短摘要。"
 - `slug` 是稳定的文章标识和地址；省略时会使用文件名；
 - `title` 和 `date` 必填，日期必须是 `YYYY-MM-DD`；
 - `category` 默认是「评论」；
-- `aiParticipation` 必填，可选值为「纯人工」「AI辅助」「AI协作」「人类辅助」「纯AI」；
+- `aiParticipation` 必填，使用 `1`–`5` 的整数，依次对应「纯人工」「AI辅助」「AI协作」「人类辅助」「纯AI」；
 - `excerpt` 可以省略或留空；留空时文章列表和文章页都不会显示摘要；
 - 阅读时间根据正文长度自动计算；
 - slug 重复、日期错误或正文为空时，构建会给出明确提示并停止。

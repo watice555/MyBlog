@@ -3,7 +3,7 @@ slug: "也许-llm-和人类也没什么太大区别"
 title: "也许 LLM 和人类也没什么太大区别"
 date: "2026-08-06"
 category: "科技随笔"
-aiParticipation: "纯人工"
+aiParticipation: 1
 excerpt: ""
 ---
 

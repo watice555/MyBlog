@@ -4,16 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import ReactMarkdown from "react-markdown";
 import { generatedPosts } from "./generated-posts";
 
-const AI_PARTICIPATION_LEVELS = ["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"] as const;
+const AI_PARTICIPATION_LABELS = ["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"] as const;
 
-type AiParticipation = typeof AI_PARTICIPATION_LEVELS[number];
+type AiParticipationLevel = 1 | 2 | 3 | 4 | 5;
 
 type Article = {
   id: string;
   title: string;
   excerpt: string;
   category: string;
-  aiParticipation: AiParticipation;
+  aiParticipation: AiParticipationLevel;
   date: string;
   readTime: string;
   content: string;
@@ -26,7 +26,7 @@ type Draft = {
   title: string;
   excerpt: string;
   category: string;
-  aiParticipation: AiParticipation;
+  aiParticipation: AiParticipationLevel;
   content: string;
 };
 
@@ -64,7 +64,7 @@ const emptyDraft: Draft = {
   title: "",
   excerpt: "",
   category: "评论",
-  aiParticipation: "纯人工",
+  aiParticipation: 1,
   content: "",
 };
 
@@ -363,7 +363,7 @@ export default function Home() {
       `title: ${JSON.stringify(draft.title.trim())}`,
       `date: ${JSON.stringify(date)}`,
       `category: ${JSON.stringify(draft.category.trim() || "评论")}`,
-      `aiParticipation: ${JSON.stringify(draft.aiParticipation)}`,
+      `aiParticipation: ${draft.aiParticipation}`,
       `excerpt: ${JSON.stringify(draft.excerpt.trim())}`,
       "---",
       "",
@@ -668,7 +668,7 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         <div className="article-overline">
           <span>{article.category}</span>
           <span>{article.date}</span>
-          <AiParticipationIndicator value={article.aiParticipation} />
+          <AiParticipationIndicator value={article.aiParticipation} showPrefix={false} />
         </div>
         <h3><a href={`#article/${encodeURIComponent(article.id)}`}>{article.title}</a></h3>
         {article.excerpt && <p>{article.excerpt}</p>}
@@ -691,24 +691,30 @@ function PageIntro({ label, title, text }: { label: string; title: string; text:
   );
 }
 
-function AiParticipationIndicator({ value }: { value: AiParticipation }) {
+function aiParticipationLabel(value: AiParticipationLevel) {
+  return AI_PARTICIPATION_LABELS[value - 1];
+}
+
+function AiParticipationIndicator({ value, showPrefix = true }: { value: AiParticipationLevel; showPrefix?: boolean }) {
+  const label = aiParticipationLabel(value);
   return (
-    <span className="ai-participation-indicator" aria-label={`AI 参与度：${value}`}>
-      AI · {value}
+    <span className="ai-participation-indicator" aria-label={`AI 参与度：${label}`}>
+      {showPrefix ? `AI · ${label}` : label}
     </span>
   );
 }
 
-function AiParticipationSlider({ value, onChange }: { value: AiParticipation; onChange: (value: AiParticipation) => void }) {
-  const level = AI_PARTICIPATION_LEVELS.indexOf(value);
-  const sliderStyle = { "--ai-progress": `${level * 25}%` } as CSSProperties;
+function AiParticipationSlider({ value, onChange }: { value: AiParticipationLevel; onChange: (value: AiParticipationLevel) => void }) {
+  const sliderValue = value - 1;
+  const label = aiParticipationLabel(value);
+  const sliderStyle = { "--ai-progress": `${sliderValue * 25}%` } as CSSProperties;
 
   return (
     <fieldset className="ai-participation-field">
       <legend className="visually-hidden">AI 参与度</legend>
       <div className="ai-participation-heading">
         <span>AI 参与度</span>
-        <strong>{value}</strong>
+        <strong>{label}</strong>
       </div>
       <div className="ai-slider-control">
         <input
@@ -716,28 +722,15 @@ function AiParticipationSlider({ value, onChange }: { value: AiParticipation; on
           min="0"
           max="4"
           step="1"
-          value={level}
+          value={sliderValue}
           aria-label="AI 参与度"
-          aria-valuetext={value}
+          aria-valuetext={label}
           style={sliderStyle}
-          onChange={(event) => onChange(AI_PARTICIPATION_LEVELS[Number(event.target.value)] ?? "纯人工")}
+          onChange={(event) => onChange((Number(event.target.value) + 1) as AiParticipationLevel)}
         />
         <div className="ai-slider-ticks" aria-hidden="true">
-          {AI_PARTICIPATION_LEVELS.map((label) => <span key={label} />)}
+          {AI_PARTICIPATION_LABELS.map((tickLabel) => <span key={tickLabel} />)}
         </div>
-      </div>
-      <div className="ai-slider-labels" aria-label="AI 参与度档位">
-        {AI_PARTICIPATION_LEVELS.map((label) => (
-          <button
-            type="button"
-            className={label === value ? "active" : ""}
-            aria-pressed={label === value}
-            onClick={() => onChange(label)}
-            key={label}
-          >
-            {label}
-          </button>
-        ))}
       </div>
     </fieldset>
   );

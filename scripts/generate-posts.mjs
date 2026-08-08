@@ -6,7 +6,6 @@ import matter from "gray-matter";
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const postsDirectory = join(projectRoot, "content", "posts");
 const outputFile = join(projectRoot, "app", "generated-posts.ts");
-const aiParticipationLevels = new Set(["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"]);
 
 function normalizeSlug(value) {
   return String(value ?? "")
@@ -42,11 +41,10 @@ function normalizeDate(value, filename) {
 }
 
 function normalizeAiParticipation(value, filename) {
-  const level = String(value ?? "").trim();
-  if (!aiParticipationLevels.has(level)) {
-    throw new Error(`${filename}: aiParticipation 必须是纯人工、AI辅助、AI协作、人类辅助或纯AI`);
+  if (!Number.isInteger(value) || value < 1 || value > 5) {
+    throw new Error(`${filename}: aiParticipation 必须是 1 到 5 之间的整数`);
   }
-  return level;
+  return value;
 }
 
 function calculateReadTime(content) {

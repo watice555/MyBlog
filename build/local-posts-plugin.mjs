@@ -168,9 +168,9 @@ function parseArticle(markdown, filename, expectedSlug) {
   const body = content.trim();
   if (!body) throw new Error(`${filename}: Markdown 正文不能为空`);
 
-  const aiParticipation = String(data.aiParticipation ?? "").trim();
-  if (!["纯人工", "AI辅助", "AI协作", "人类辅助", "纯AI"].includes(aiParticipation)) {
-    throw new Error(`${filename}: aiParticipation 必须是纯人工、AI辅助、AI协作、人类辅助或纯AI`);
+  const aiParticipation = data.aiParticipation;
+  if (!Number.isInteger(aiParticipation) || aiParticipation < 1 || aiParticipation > 5) {
+    throw new Error(`${filename}: aiParticipation 必须是 1 到 5 之间的整数`);
   }
 
   return {

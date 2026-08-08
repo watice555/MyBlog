@@ -3,7 +3,7 @@ slug: "2026-08-05 合并日报"
 title: "2026-08-05 合并日报"
 date: "2026-08-05"
 category: "日报"
-aiParticipation: "纯人工"
+aiParticipation: 1
 excerpt: "SpaceX 巨额资本开支引发盈利担忧，AI 安全漏洞暴露模型风险。A 股风格切换至软件板块，宇树科技启动 IPO。地缘缓和推升 BTC 反弹，但流动性隐忧犹存；Coldcard 固件漏洞致重大损失，加密市场监管与法律纠纷持续发酵。"
 ---
 

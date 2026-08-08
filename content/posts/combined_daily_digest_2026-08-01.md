@@ -3,7 +3,7 @@ slug: "2026-08-01 合并日报"
 title: "2026-08-01 合并日报"
 date: "2026-08-01"
 category: "日报"
-aiParticipation: "纯人工"
+aiParticipation: 1
 excerpt: "美伊冲突与宏观干预共振致风险资产承压，BTC跌破6.3万美元并引发爆仓潮；Gate.io及Coldcard安全事件加剧行业信任危机；AI模型突破伴随安全隐患，A股科技板块剧烈波动，市场分歧显著。"
 ---
 
