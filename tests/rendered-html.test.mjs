@@ -161,10 +161,11 @@ test("server-renders the finished blog", async () => {
   assert.match(html, /<title>凝泠｜watice’s blog<\/title>/);
   assert.match(html, /在噪声里/);
   assert.match(html, /辨认真实/);
-  assert.match(html, /COMMENTARY · FINANCE · TECHNOLOGY/);
+  assert.match(html, /ARTICLES · FINANCE · TECHNOLOGY/);
   assert.match(html, /watice’s blog/);
   assert.doesNotMatch(html, /一隅|CORNER NOTES|PERSONAL WRITING/);
-  assert.match(html, /最近评论/);
+  assert.match(html, /最近文章/);
+  assert.doesNotMatch(html, /RECENT COMMENTARY|ALL COMMENTARY|最近评论/);
   assert.match(html, /金融、科技/);
   assert.doesNotMatch(html, /写文章|编辑文章|同步文章|href="#editor"/);
   assert.doesNotMatch(html, /AI 智能总结|api\/local-summary/);

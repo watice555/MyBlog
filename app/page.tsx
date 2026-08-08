@@ -504,7 +504,7 @@ export default function Home() {
           <>
             <section className="hero" aria-labelledby="hero-title">
               <div className="hero-copy">
-                <p className="eyebrow"><span /> COMMENTARY · FINANCE · TECHNOLOGY</p>
+                <p className="eyebrow"><span /> ARTICLES · FINANCE · TECHNOLOGY</p>
                 <h1 id="hero-title">在噪声里<br />辨认真实</h1>
                 <p className="hero-intro">这里写金融、科技，以及它们如何改变商业与生活。<br />记录事实，拆解叙事，也保留可被修正的判断。</p>
                 <a className="primary-link" href="#archive">开始阅读 <span aria-hidden="true">→</span></a>
@@ -519,8 +519,8 @@ export default function Home() {
             <section className="latest" aria-labelledby="latest-title">
               <div className="section-heading">
                 <div>
-                  <p className="section-kicker">RECENT COMMENTARY</p>
-                  <h2 id="latest-title">最近评论</h2>
+                  <p className="section-kicker">RECENT ARTICLES</p>
+                  <h2 id="latest-title">最近文章</h2>
                 </div>
                 <a href="#archive">查看全部 {String(articles.length).padStart(2, "0")} <span aria-hidden="true">↗</span></a>
               </div>
@@ -541,7 +541,7 @@ export default function Home() {
 
         {view.name === "archive" && (
           <section className="inner-page archive-page">
-            <PageIntro label="ALL COMMENTARY" title="文章归档" text="围绕金融、科技与时代变化的评论，按发布时间排列。" />
+            <PageIntro label="ALL ARTICLES" title="文章归档" text="围绕金融、科技与时代变化的文章，按发布时间排列。" />
             <div className="archive-tools" aria-label="文章搜索与分类筛选">
               <label className="archive-search">
                 <span>搜索文章</span>
