@@ -161,7 +161,7 @@ test("server-renders the finished blog", async () => {
   assert.match(html, /<title>凝泠｜watice’s blog<\/title>/);
   assert.match(html, /在噪声里/);
   assert.match(html, /辨认真实/);
-  assert.match(html, /ARTICLES · FINANCE · TECHNOLOGY/);
+  assert.match(html, /COMMENTARY · FINANCE · TECHNOLOGY/);
   assert.match(html, /watice’s blog/);
   assert.doesNotMatch(html, /一隅|CORNER NOTES|PERSONAL WRITING/);
   assert.match(html, /最近文章/);

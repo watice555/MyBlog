@@ -504,7 +504,7 @@ export default function Home() {
           <>
             <section className="hero" aria-labelledby="hero-title">
               <div className="hero-copy">
-                <p className="eyebrow"><span /> ARTICLES · FINANCE · TECHNOLOGY</p>
+                <p className="eyebrow"><span /> COMMENTARY · FINANCE · TECHNOLOGY</p>
                 <h1 id="hero-title">在噪声里<br />辨认真实</h1>
                 <p className="hero-intro">这里写金融、科技，以及它们如何改变商业与生活。<br />记录事实，拆解叙事，也保留可被修正的判断。</p>
                 <a className="primary-link" href="#archive">开始阅读 <span aria-hidden="true">→</span></a>
