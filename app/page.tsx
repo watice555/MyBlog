@@ -651,14 +651,16 @@ export default function Home() {
                   <small className="slug-hint">标题与 Slug 不同：文章列表将显示标题，链接将继续使用此 Slug。</small>
                 )}
               </label>
-              <label>
-                <span>分类</span>
-                <input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="评论" />
-              </label>
-              <AiParticipationSlider
-                value={draft.aiParticipation}
-                onChange={(aiParticipation) => setDraft({ ...draft, aiParticipation })}
-              />
+              <div className="editor-meta-side">
+                <label>
+                  <span>分类</span>
+                  <input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="评论" />
+                </label>
+                <AiParticipationSlider
+                  value={draft.aiParticipation}
+                  onChange={(aiParticipation) => setDraft({ ...draft, aiParticipation })}
+                />
+              </div>
               <label className="excerpt-field">
                 <span className="excerpt-label">
                   <span>摘要</span>

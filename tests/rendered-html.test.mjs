@@ -207,12 +207,15 @@ test("renders GFM tables and mathematical formulas with responsive styles", asyn
   assert.match(page, /placeholder="从这里开始写下今天的想法……"/);
   assert.match(page, /placeholder="用一小段话介绍这篇文章（可选）"/);
   assert.match(page, /className="title-input"[\s\S]*?placeholder="给这篇文章一个名字"[\s\S]*?rows=\{2\}/);
+  assert.match(page, /className="editor-meta-side"[\s\S]*?placeholder="评论"[\s\S]*?<AiParticipationSlider/);
   assert.match(page, /category:\s*"评论"/);
   assert.match(page, /placeholder="评论"/);
   assert.match(page, /rows=\{4\}/);
   assert.match(styles, /\.editor-meta textarea\s*\{/);
   assert.match(styles, /\.editor-meta label\s*\{[\s\S]*?min-width:\s*0/);
   assert.match(styles, /\.editor-meta \.title-input\s*\{[\s\S]*?overflow-wrap:\s*anywhere/);
+  assert.match(styles, /grid-template-columns:\s*minmax\(0, 1fr\) minmax\(190px, 260px\) minmax\(200px, 260px\)/);
+  assert.match(styles, /\.editor-meta-side\s*\{[\s\S]*?align-content:\s*start/);
   assert.match(styles, /resize:\s*vertical/);
   assert.match(styles, /\.prose strong\s*\{/);
   assert.match(styles, /\.prose em\s*\{/);
