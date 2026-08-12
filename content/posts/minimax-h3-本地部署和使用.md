@@ -3,9 +3,10 @@ slug: "minimax-h3-本地部署和使用"
 title: "在 Mac 上用 h3.c 部署和使用 MiniMax-H3"
 date: "2026-08-12"
 category: "科技笔记"
-aiParticipation: 3
+aiParticipation: 4
 excerpt: "从零下载、编译并使用 antirez 的 h3.c，在 Apple Silicon Mac 上运行 MiniMax-H3 官方模型并生成带声音视频。"
 ---
+
 # 从零开始：在 Mac 上用 h3.c 运行 MiniMax-H3
 
 这是一份面向第一次接触 h3.c 和 MiniMax-H3 的教程。目标是从一台刚准备好的
@@ -21,6 +22,7 @@ Apple Silicon Mac 出发，下载并编译 antirez 开发的 h3.c、取得官方
 - [MiniMax-H3 官方模型](https://huggingface.co/MiniMaxAI/MiniMax-H3)
 - [MiniMax-H3 官方提示词指南](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md)
 - [Hugging Face CLI 文档](https://huggingface.co/docs/huggingface_hub/en/guides/cli)
+- [H3 Studio（基于 h3.c 的非官方可选 GUI）](https://github.com/watice555/h3.c-studio)
 
 ## 1. 先了解将要安装什么
 
