@@ -667,6 +667,25 @@ h3.c 生成到 `outputs/`。提示词优化可以接 Ollama 或 OpenAI 兼容 AP
 功能，不是 h3.c 的运行依赖。具体界面与配置方法参见
 [H3 Studio GUI 中文说明](https://github.com/watice555/h3.c-studio/blob/main/gui/README.zh-CN.md)。
 
+### 更新 H3 Studio
+
+H3 Studio 用户从 fork 的 `main` 分支更新，不需要自己从 antirez 上游做 rebase：
+
+```bash
+cd ~/AI/h3.c-studio
+git status
+git pull --ff-only
+make -j8
+./h3 --info -d ./MiniMax-H3
+./start_h3_gui.command
+```
+
+更新前先确认 `git status` 没有自己的未提交修改。正常的 `git pull` 不会删除或重新
+下载被 Git 忽略的 `MiniMax-H3/`、`outputs/` 和本机配置。若修改过源码或 GUI，先把
+改动提交到自己的分支；不要用 `git reset --hard`、`git clean -fdx` 或覆盖整个目录
+的方式更新。H3 Studio 维护者会负责把适合的 h3.c 上游改动同步到 fork，普通用户
+只需跟随 fork 的更新。
+
 ## 15. 更新 h3.c
 
 使用 antirez 原始仓库时：
