@@ -918,7 +918,7 @@ export default function Home() {
                   <h1>{draft.title || "未命名的文章"}</h1>
                   <div className="article-meta">
                     <span>{draft.originalDate || formatDate(new Date())} · {readTime(draft.content)}</span>
-                    <AiParticipationIndicator value={draft.aiParticipation} />
+                    <AiParticipationIndicator value={draft.aiParticipation} variant="label" />
                   </div>
                   <Markdown source={draft.content} />
                 </article>
@@ -960,7 +960,7 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         <div className="article-overline">
           <span>{article.category}</span>
           <span>{article.date}</span>
-          <AiParticipationIndicator value={article.aiParticipation} />
+          <AiParticipationIndicator value={article.aiParticipation} variant="dots" />
         </div>
         <h3><a href={`#article/${encodeURIComponent(article.id)}`}>{article.title}</a></h3>
         {article.excerpt && <p>{article.excerpt}</p>}
@@ -987,11 +987,28 @@ function aiParticipationLabel(value: AiParticipationLevel) {
   return AI_PARTICIPATION_LABELS[value - 1];
 }
 
-function AiParticipationIndicator({ value }: { value: AiParticipationLevel }) {
+function AiParticipationIndicator({ value, variant }: { value: AiParticipationLevel; variant: "dots" | "label" }) {
   const label = aiParticipationLabel(value);
   return (
-    <span className="ai-participation-indicator" aria-label={`AI 参与度：${label}`}>
-      {label}
+    <span
+      className={`ai-participation-indicator ai-participation-indicator--${variant}`}
+      aria-label={`AI 参与度：${label}`}
+      title={`AI 参与度：${label}`}
+    >
+      {AI_PARTICIPATION_LABELS.map((dotLabel, index) => {
+        const active = index + 1 === value;
+        if (active && variant === "label") {
+          return <span className="ai-participation-label" key={dotLabel}>{dotLabel}</span>;
+        }
+
+        return (
+          <span
+            aria-hidden="true"
+            className={`ai-participation-dot${active ? " active" : ""}`}
+            key={dotLabel}
+          />
+        );
+      })}
     </span>
   );
 }
@@ -1051,7 +1068,7 @@ function ArticlePage({ article, onEdit, canEdit }: { article?: Article; onEdit: 
         {article.excerpt && <p className="reading-deck">{article.excerpt}</p>}
         <div className="article-meta">
           <span>{article.date} · {article.readTime}</span>
-          <AiParticipationIndicator value={article.aiParticipation} />
+          <AiParticipationIndicator value={article.aiParticipation} variant="label" />
         </div>
       </header>
       <Markdown source={article.content} />

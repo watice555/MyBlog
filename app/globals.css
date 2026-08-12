@@ -366,21 +366,35 @@ textarea:focus-visible {
 .ai-participation-indicator {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   width: fit-content;
   min-height: 20px;
-  padding: 2px 7px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  padding: 0 3px;
   line-height: 1;
   white-space: nowrap;
 }
 
-.article-overline .ai-participation-indicator {
-  color: var(--muted);
+.ai-participation-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: rgba(30, 41, 35, 0.24);
+}
+
+.ai-participation-dot.active {
+  background: var(--coral);
+  box-shadow:
+    0 0 0 3px rgba(232, 102, 74, 0.13),
+    0 0 9px rgba(232, 102, 74, 0.52);
+}
+
+.ai-participation-label,
+.article-overline .ai-participation-label {
+  color: var(--coral);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .article-body h3 {
