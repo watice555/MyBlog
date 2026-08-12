@@ -31,7 +31,7 @@ function normalizeSlug(value) {
     .replace(/^-|-$/g, "");
 }
 
-async function createLocalApiFixture(testContext) {
+async function createLocalApiFixture(testContext, options = {}) {
   const projectRoot = await mkdtemp(resolve(tmpdir(), "watice-local-content-"));
   testContext.after(() => rm(projectRoot, { recursive: true, force: true }));
 
@@ -58,7 +58,7 @@ await writeFile(marker, String(count + 1), "utf8");
 `, "utf8");
 
   let middleware;
-  createLocalPostsPlugin(projectRoot).configureServer({
+  createLocalPostsPlugin(projectRoot, options).configureServer({
     middlewares: {
       use(handler) {
         middleware = handler;
@@ -92,6 +92,31 @@ async function requestLocalPosts(middleware, { host = "localhost:3000", origin =
     },
   };
   await middleware({ headers: { host, origin }, method: "GET", url: "/api/local-post" }, response, () => {});
+  return { body: JSON.parse(body), status: response.statusCode };
+}
+
+async function requestLocalJson(
+  middleware,
+  url,
+  { method = "GET", input, host = "localhost:3000", origin = "http://localhost:3000" } = {},
+) {
+  let body = "";
+  const response = {
+    statusCode: 200,
+    setHeader() {},
+    end(chunk = "") {
+      body += chunk;
+    },
+  };
+  const request = input === undefined
+    ? Readable.from([])
+    : Readable.from([Buffer.from(JSON.stringify(input))]);
+  Object.assign(request, {
+    headers: { host, origin, ...(input === undefined ? {} : { "content-type": "application/json" }) },
+    method,
+    url,
+  });
+  await middleware(request, response, () => {});
   return { body: JSON.parse(body), status: response.statusCode };
 }
 
@@ -168,6 +193,7 @@ test("server-renders the finished blog", async () => {
   assert.doesNotMatch(html, /RECENT COMMENTARY|ALL COMMENTARY|最近评论/);
   assert.match(html, /金融、科技/);
   assert.doesNotMatch(html, /写文章|编辑文章|同步文章|href="#editor"/);
+  assert.doesNotMatch(html, /草稿箱|本地草稿/);
   assert.doesNotMatch(html, /AI 智能总结|api\/local-summary/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
@@ -253,14 +279,14 @@ test("supports editing and updating existing articles", async () => {
   assert.match(page, /window\.location\.hash = `editor\/\$\{encodeURIComponent\(article\.id\)\}`/);
   assert.match(page, /const restoreEditorDraft = \(\) =>/);
   assert.match(page, /articles\.find\(\(candidate\) => candidate\.id === currentView\.id\)/);
-  assert.match(page, /current\.articleId === article\.id \? current : draftFromArticle\(article\)/);
+  assert.match(page, /current\.articleId === article\.id && !current\.draftId \? current : draftFromArticle\(article\)/);
   assert.doesNotMatch(page, /localArticles|corner-posts|corner-draft|localStorage/);
   assert.match(page, /onEdit=\{editArticle\}/);
   assert.match(page, />编辑文章<\/button>/);
   assert.match(page, /className="reading-topbar"/);
   assert.equal(page.match(/onClick=\{\(\) => onEdit\(article\)\}>编辑文章<\/button>/g)?.length, 2);
   assert.doesNotMatch(page, /AI · \$\{label\}/);
-  assert.match(page, /draft\.articleId \? "保存修改" : "保存文章"/);
+  assert.match(page, /draft\.articleId \? "正式保存修改" : "正式保存并发布"/);
   assert.match(page, /onClick=\{saveMarkdownToProject\}/);
   assert.match(page, /normalizeSlug\(draft\.title\) !== normalizeSlug\(draft\.slug\)/);
   assert.match(page, /标题与 Slug 不同：文章列表将显示标题，链接将继续使用此 Slug。/);
@@ -382,9 +408,9 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.match(page, /cache: "no-store"/);
   assert.match(page, /setProjectArticles/);
   assert.match(page, /const refreshProjectArticles = useCallback/);
-  assert.match(page, /await refreshProjectArticles\(\)/);
-  assert.match(page, /文章以 content\/posts 中的 Markdown 文件为准/);
-  assert.doesNotMatch(page, /localStorage|保存草稿|发布到本机|保存到文章目录/);
+  assert.match(page, /Promise\.all\(\[refreshProjectArticles\(\), refreshDraftArticles\(\)\]\)/);
+  assert.match(page, /正式保存会写入 content\/posts/);
+  assert.doesNotMatch(page, /localStorage|发布到本机|保存到文章目录/);
   assert.match(localPostsPlugin, /const postRoute = "\/api\/local-post"/);
   assert.match(localPostsPlugin, /const generateRoute = "\/api\/local-content-generate"/);
   assert.match(localPostsPlugin, /isAllowedHost\(request\.headers\.host\)/);
@@ -460,6 +486,148 @@ Updated body.
 
   await requestLocalPosts(middleware);
   assert.equal(await readFile(marker, "utf8"), "2");
+});
+
+test("stores ignored Markdown drafts without publishing them", async (testContext) => {
+  let publishCalls = 0;
+  const { middleware, projectRoot } = await createLocalApiFixture(testContext, {
+    publishPost: async () => {
+      publishCalls += 1;
+      return { commit: "unused", pushed: true };
+    },
+  });
+  const markdown = `---
+slug: "unfinished-note"
+title: "还没写完"
+date: "2026-08-12"
+category: "评论"
+aiParticipation: 2
+excerpt: ""
+---
+
+草稿正文。
+`;
+
+  const saved = await requestLocalJson(middleware, "/api/local-draft", {
+    method: "POST",
+    input: { slug: "unfinished-note", markdown, overwrite: false },
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.filename, "unfinished-note.md");
+  assert.equal(saved.body.draft.title, "还没写完");
+  assert.equal(publishCalls, 0);
+  assert.match(await readFile(resolve(projectRoot, "content", "drafts", "unfinished-note.md"), "utf8"), /草稿正文/);
+
+  const listed = await requestLocalJson(middleware, "/api/local-draft");
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.count, 1);
+  assert.equal(listed.body.drafts[0].id, "unfinished-note");
+  assert.equal((await requestLocalPosts(middleware)).body.articles.length, 1);
+});
+
+test("publishes a draft and only removes it after a successful push", async (testContext) => {
+  const publishCalls = [];
+  const { middleware, projectRoot } = await createLocalApiFixture(testContext, {
+    publishPost: async (input) => {
+      publishCalls.push(input);
+      return { commit: "abc1234", pushed: true };
+    },
+  });
+  const markdown = `---
+slug: "ready-note"
+title: "准备发布"
+date: "2026-08-12"
+category: "科技"
+aiParticipation: 3
+excerpt: "摘要"
+---
+
+正式正文。
+`;
+
+  await requestLocalJson(middleware, "/api/local-draft", {
+    method: "POST",
+    input: { slug: "ready-note", markdown, overwrite: false },
+  });
+  const published = await requestLocalJson(middleware, "/api/local-post", {
+    method: "POST",
+    input: { slug: "ready-note", markdown, overwrite: false, sourceDraftSlug: "ready-note" },
+  });
+
+  assert.equal(published.status, 200);
+  assert.equal(published.body.pushed, true);
+  assert.equal(published.body.commit, "abc1234");
+  assert.equal(publishCalls.length, 1);
+  assert.equal(publishCalls[0].filename, "ready-note.md");
+  await assert.rejects(access(resolve(projectRoot, "content", "drafts", "ready-note.md")));
+  assert.match(await readFile(resolve(projectRoot, "content", "posts", "ready-note.md"), "utf8"), /正式正文/);
+});
+
+test("keeps a source draft when publishing fails and rolls back pre-commit failures", async (testContext) => {
+  const pushFailure = await createLocalApiFixture(testContext, {
+    publishPost: async () => ({ commit: "deadbee", pushed: false, error: "网络不可用" }),
+  });
+  const markdown = `---
+slug: "retry-note"
+title: "稍后重试"
+date: "2026-08-12"
+category: "评论"
+aiParticipation: 1
+excerpt: ""
+---
+
+需要保留的正文。
+`;
+  await requestLocalJson(pushFailure.middleware, "/api/local-draft", {
+    method: "POST",
+    input: { slug: "retry-note", markdown, overwrite: false },
+  });
+  const notPushed = await requestLocalJson(pushFailure.middleware, "/api/local-post", {
+    method: "POST",
+    input: { slug: "retry-note", markdown, sourceDraftSlug: "retry-note" },
+  });
+  assert.equal(notPushed.status, 502);
+  assert.equal(notPushed.body.pushed, false);
+  const retryDraft = await readFile(resolve(pushFailure.projectRoot, "content", "drafts", "retry-note.md"), "utf8");
+  assert.match(retryDraft, /sourceArticle: retry-note/);
+  await access(resolve(pushFailure.projectRoot, "content", "posts", "retry-note.md"));
+
+  const draftsAfterReload = await requestLocalJson(pushFailure.middleware, "/api/local-draft");
+  assert.equal(draftsAfterReload.body.drafts[0].sourceArticleId, "retry-note");
+
+  const preCommitFailure = await createLocalApiFixture(testContext, {
+    publishPost: async () => {
+      throw new Error("静态构建失败");
+    },
+  });
+  const rolledBack = await requestLocalJson(preCommitFailure.middleware, "/api/local-post", {
+    method: "POST",
+    input: { slug: "retry-note", markdown },
+  });
+  assert.equal(rolledBack.status, 500);
+  assert.match(rolledBack.body.error, /静态构建失败/);
+  await assert.rejects(access(resolve(preCommitFailure.projectRoot, "content", "posts", "retry-note.md")));
+});
+
+test("exposes the local draft box and one-click publish workflow only in the editor", async () => {
+  const [page, styles, localPostsPlugin, gitignore] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../build/local-posts-plugin.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../.gitignore", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /fetch\("\/api\/local-draft"/);
+  assert.match(page, /content\/drafts 中的本地 Markdown/);
+  assert.match(page, />草稿箱<\/a>/);
+  assert.match(page, /正式保存并发布/);
+  assert.match(page, /sourceDraftSlug: draft\.draftId/);
+  assert.match(styles, /\.draft-card\s*\{/);
+  assert.match(localPostsPlugin, /const draftRoute = "\/api\/local-draft"/);
+  assert.match(localPostsPlugin, /execFileAsync\("npm", \["run", "build:github"\]/);
+  assert.match(localPostsPlugin, /execFileAsync\("git", \["push", "origin", "main"\]/);
+  assert.match(localPostsPlugin, /assertNoOtherPostChanges/);
+  assert.match(gitignore, /^\/content\/drafts\/$/m);
 });
 
 test("keeps local AI writing tools author-oriented and suggestion-only", async (testContext) => {

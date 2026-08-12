@@ -24,6 +24,7 @@ type Article = {
 
 type Draft = {
   articleId?: string;
+  draftId?: string;
   originalDate?: string;
   slug: string;
   title: string;
@@ -43,6 +44,8 @@ type LocalAiResponse = {
 type PostSaveResponse = {
   filename?: string;
   article?: Article;
+  commit?: string;
+  pushed?: boolean;
   error?: string;
 };
 
@@ -52,14 +55,30 @@ type PostListResponse = {
   error?: string;
 };
 
+type DraftArticle = Article & {
+  sourceArticleId?: string;
+};
+
+type DraftListResponse = {
+  drafts?: DraftArticle[];
+  count?: number;
+  error?: string;
+};
+
+type DraftSaveResponse = {
+  filename?: string;
+  draft?: DraftArticle;
+  error?: string;
+};
+
 type ImageSaveResponse = {
   path?: string;
   error?: string;
 };
 
 type View =
-  | { name: "home" | "archive" | "about" }
-  | { name: "editor"; id?: string }
+  | { name: "home" | "archive" | "about" | "drafts" }
+  | { name: "editor"; id?: string; draftId?: string }
   | { name: "article"; id: string };
 
 const repositoryArticles: Article[] = generatedPosts.map((article) => ({ ...article }));
@@ -88,6 +107,11 @@ function routeFromHash(): View {
   if (value.startsWith("article/")) {
     return { name: "article", id: decodeURIComponent(value.slice(8)) };
   }
+  if (value.startsWith("editor/draft/")) {
+    return localEditorAvailable()
+      ? { name: "editor", draftId: decodeURIComponent(value.slice(13)) }
+      : { name: "home" };
+  }
   if (value.startsWith("editor/")) {
     return localEditorAvailable()
       ? { name: "editor", id: decodeURIComponent(value.slice(7)) }
@@ -95,6 +119,9 @@ function routeFromHash(): View {
   }
   if (value === "editor") {
     return localEditorAvailable() ? { name: "editor" } : { name: "home" };
+  }
+  if (value === "drafts") {
+    return localEditorAvailable() ? { name: "drafts" } : { name: "home" };
   }
   if (["archive", "about"].includes(value)) {
     return { name: value as "archive" | "about" };
@@ -172,15 +199,31 @@ function draftFromArticle(article: Article): Draft {
   };
 }
 
+function draftFromDraftArticle(article: DraftArticle): Draft {
+  return {
+    articleId: article.sourceArticleId,
+    draftId: article.id,
+    originalDate: article.date,
+    slug: article.sourceArticleId || article.id,
+    title: article.title,
+    excerpt: article.excerpt,
+    category: article.category,
+    aiParticipation: article.aiParticipation,
+    content: article.content,
+  };
+}
+
 export default function Home() {
   const [view, setView] = useState<View>({ name: "home" });
   const [projectArticles, setProjectArticles] = useState<Article[]>(repositoryArticles);
+  const [draftArticles, setDraftArticles] = useState<DraftArticle[]>([]);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [toast, setToast] = useState("");
   const [summarizing, setSummarizing] = useState(false);
   const [proofreading, setProofreading] = useState(false);
   const [proofreadingSuggestions, setProofreadingSuggestions] = useState("");
   const [savingMarkdown, setSavingMarkdown] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -234,6 +277,16 @@ export default function Home() {
     return result;
   }, []);
 
+  const refreshDraftArticles = useCallback(async () => {
+    const response = await fetch("/api/local-draft", { cache: "no-store" });
+    const result = await response.json() as DraftListResponse;
+    if (!response.ok || !Array.isArray(result.drafts)) {
+      throw new Error(result.error || "无法从 content/drafts 读取草稿");
+    }
+    setDraftArticles(result.drafts);
+    return result;
+  }, []);
+
   useEffect(() => {
     const syncRoute = () => setView(routeFromHash());
     syncRoute();
@@ -248,6 +301,9 @@ export default function Home() {
         void refreshProjectArticles().catch(() => {
           // Keep the last valid file snapshot while an external edit is incomplete.
         });
+        void refreshDraftArticles().catch(() => {
+          // Keep the last valid draft snapshot while an external edit is incomplete.
+        });
       }
     };
     refreshWhenVisible();
@@ -261,21 +317,29 @@ export default function Home() {
       window.removeEventListener("focus", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [refreshProjectArticles]);
+  }, [refreshDraftArticles, refreshProjectArticles]);
 
   useEffect(() => {
     const restoreEditorDraft = () => {
       const currentView = routeFromHash();
-      if (currentView.name !== "editor" || !currentView.id) return;
-      const article = articles.find((candidate) => candidate.id === currentView.id);
-      if (!article) return;
-      setDraft((current) => current.articleId === article.id ? current : draftFromArticle(article));
+      if (currentView.name !== "editor") return;
+      if (currentView.draftId) {
+        const savedDraft = draftArticles.find((candidate) => candidate.id === currentView.draftId);
+        if (!savedDraft) return;
+        setDraft((current) => current.draftId === savedDraft.id ? current : draftFromDraftArticle(savedDraft));
+        return;
+      }
+      if (currentView.id) {
+        const article = articles.find((candidate) => candidate.id === currentView.id);
+        if (!article) return;
+        setDraft((current) => current.articleId === article.id && !current.draftId ? current : draftFromArticle(article));
+      }
     };
 
     restoreEditorDraft();
     window.addEventListener("hashchange", restoreEditorDraft);
     return () => window.removeEventListener("hashchange", restoreEditorDraft);
-  }, [articles]);
+  }, [articles, draftArticles]);
 
   const notify = (message: string) => {
     setToast(message);
@@ -292,6 +356,18 @@ export default function Home() {
     setDraft(draftFromArticle(article));
     setProofreadingSuggestions("");
     window.location.hash = `editor/${encodeURIComponent(article.id)}`;
+  };
+
+  const editSavedDraft = (savedDraft: DraftArticle) => {
+    const hasOtherDraft = Boolean(
+      draft.draftId !== savedDraft.id &&
+      (draft.title.trim() || draft.excerpt.trim() || draft.content.trim()),
+    );
+    if (hasOtherDraft && !window.confirm("打开这份草稿会替换当前编辑内容，是否继续？")) return;
+
+    setDraft(draftFromDraftArticle(savedDraft));
+    setProofreadingSuggestions("");
+    window.location.assign(`#editor/draft/${encodeURIComponent(savedDraft.id)}`);
   };
 
   const startNewDraft = () => {
@@ -427,20 +503,9 @@ export default function Home() {
     }
   };
 
-  const saveMarkdownToProject = async () => {
-    if (!draft.title.trim() || !draft.content.trim()) {
-      notify("请先写下标题和正文");
-      return;
-    }
-
-    const slug = normalizeSlug(draft.articleId || draft.slug || draft.title);
-    if (!slug) {
-      notify("请填写有效的 slug");
-      return;
-    }
-
+  const markdownForDraft = (slug: string, { includeSourceArticle = false } = {}) => {
     const date = draft.originalDate?.replaceAll(".", "-") || new Date().toISOString().slice(0, 10);
-    const frontmatter = [
+    return [
       "---",
       `slug: ${JSON.stringify(slug)}`,
       `title: ${JSON.stringify(draft.title.trim())}`,
@@ -448,10 +513,69 @@ export default function Home() {
       `category: ${JSON.stringify(draft.category.trim() || "评论")}`,
       `aiParticipation: ${draft.aiParticipation}`,
       `excerpt: ${JSON.stringify(draft.excerpt.trim())}`,
+      ...(includeSourceArticle && draft.articleId
+        ? [`sourceArticle: ${JSON.stringify(draft.articleId)}`]
+        : []),
       "---",
       "",
+      draft.content,
       "",
     ].join("\n");
+  };
+
+  const saveToDraftBox = async () => {
+    const slug = normalizeSlug(draft.draftId || draft.articleId || draft.slug || draft.title);
+    if (!slug) {
+      notify("请先填写标题或有效的 slug");
+      return;
+    }
+
+    setSavingDraft(true);
+    try {
+      const response = await fetch("/api/local-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug,
+          markdown: markdownForDraft(slug, { includeSourceArticle: true }),
+          overwrite: Boolean(draft.draftId),
+        }),
+      });
+      const responseText = await response.text();
+      let result: DraftSaveResponse = {};
+      try {
+        result = JSON.parse(responseText) as DraftSaveResponse;
+      } catch {
+        throw new Error(response.status === 404
+          ? "本机草稿服务未启动，请重启 npm run dev"
+          : "本机草稿服务返回了无法识别的响应");
+      }
+      if (!response.ok || !result.filename || !result.draft) {
+        throw new Error(result.error || "草稿保存失败");
+      }
+      setDraft(draftFromDraftArticle(result.draft));
+      await refreshDraftArticles();
+      notify(`已保存到草稿箱：${result.filename}`);
+      window.location.assign(`#editor/draft/${encodeURIComponent(result.draft.id)}`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "草稿保存失败");
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const saveMarkdownToProject = async () => {
+    if (!draft.title.trim() || !draft.content.trim()) {
+      notify("正式发布前请写下标题和正文");
+      return;
+    }
+
+    const slug = normalizeSlug(draft.articleId || draft.slug || draft.draftId || draft.title);
+    if (!slug) {
+      notify("请填写有效的 slug");
+      return;
+    }
+
     setSavingMarkdown(true);
     try {
       const response = await fetch("/api/local-post", {
@@ -459,8 +583,9 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slug,
-          markdown: frontmatter + draft.content,
+          markdown: markdownForDraft(slug),
           overwrite: Boolean(draft.articleId),
+          sourceDraftSlug: draft.draftId,
         }),
       });
       const responseText = await response.text();
@@ -473,12 +598,15 @@ export default function Home() {
         }
         throw new Error("本机文章保存服务返回了无法识别的响应");
       }
-      if (!response.ok || !result.filename) {
+      if (!response.ok || !result.filename || result.pushed !== true) {
+        if (result.article) {
+          setDraft((current) => ({ ...current, articleId: result.article?.id || slug }));
+        }
         throw new Error(result.error || "Markdown 保存失败");
       }
-      await refreshProjectArticles();
+      await Promise.all([refreshProjectArticles(), refreshDraftArticles()]);
       setDraft({ ...emptyDraft });
-      notify(`已写入 content/posts/${result.filename}`);
+      notify(`已提交并推送 ${result.commit || "最新文章"}`);
       window.location.hash = `article/${encodeURIComponent(slug)}`;
     } catch (error) {
       notify(error instanceof Error ? error.message : "Markdown 保存失败");
@@ -501,7 +629,10 @@ export default function Home() {
           <a className={activeNav === "archive" ? "active" : ""} href="#archive">文章</a>
           <a className={activeNav === "about" ? "active" : ""} href="#about">关于</a>
           {editorEnabled && (
-            <a className="editor-link" href="#editor">写文章 <span aria-hidden="true">↗</span></a>
+            <>
+              <a className={activeNav === "drafts" ? "active" : ""} href="#drafts">草稿箱</a>
+              <a className="editor-link" href="#editor">写文章 <span aria-hidden="true">↗</span></a>
+            </>
           )}
         </nav>
       </header>
@@ -625,21 +756,55 @@ export default function Home() {
           </section>
         )}
 
+        {view.name === "drafts" && editorEnabled && (
+          <section className="inner-page drafts-page">
+            <PageIntro
+              label="LOCAL DRAFTS"
+              title="草稿箱"
+              text="这里的 Markdown 只保存在本机 content/drafts，不会出现在公开文章列表或 Git 提交中。"
+            />
+            <div className="drafts-heading">
+              <span>共 {draftArticles.length} 份本地草稿</span>
+              <button className="primary-button" type="button" onClick={startNewDraft}>新建草稿</button>
+            </div>
+            <div className="draft-list">
+              {draftArticles.map((savedDraft) => (
+                <article className="draft-card" key={savedDraft.id}>
+                  <div>
+                    <p>{savedDraft.sourceArticleId ? "正式文章的修改草稿" : "未发布草稿"} · {savedDraft.date}</p>
+                    <h2>{savedDraft.title || "未命名草稿"}</h2>
+                    <span>{savedDraft.category} · {savedDraft.readTime}</span>
+                  </div>
+                  <button type="button" onClick={() => editSavedDraft(savedDraft)}>打开编辑</button>
+                </article>
+              ))}
+            </div>
+            {draftArticles.length === 0 && (
+              <div className="drafts-empty">
+                <p>草稿箱还是空的。编辑文章时点「存回草稿箱」，内容就会作为本地 Markdown 保存在这里。</p>
+              </div>
+            )}
+          </section>
+        )}
+
         {view.name === "editor" && editorEnabled && (
           <section className="editor-page">
             <div className="editor-topbar">
               <div>
                 <p className="section-kicker">QUIET EDITOR</p>
-                <h1>{draft.articleId ? "编辑文章" : "写一篇新文章"}</h1>
+                <h1>{draft.draftId ? "编辑草稿" : draft.articleId ? "编辑文章" : "写一篇新文章"}</h1>
               </div>
               <div className="editor-actions">
-                {draft.articleId && <button className="secondary-button" type="button" onClick={startNewDraft}>新建文章</button>}
+                {(draft.articleId || draft.draftId) && <button className="secondary-button" type="button" onClick={startNewDraft}>新建文章</button>}
+                <button className="secondary-button" type="button" onClick={saveToDraftBox} disabled={savingDraft || savingMarkdown}>
+                  {savingDraft ? "正在保存草稿…" : draft.draftId ? "存回草稿箱" : "保存到草稿箱"}
+                </button>
                 <button className="primary-button" type="button" onClick={saveMarkdownToProject} disabled={savingMarkdown}>
-                  {savingMarkdown ? "正在保存…" : draft.articleId ? "保存修改" : "保存文章"}
+                  {savingMarkdown ? "构建、提交并推送中…" : draft.articleId ? "正式保存修改" : "正式保存并发布"}
                 </button>
               </div>
             </div>
-            <p className="editor-tip">文章以 content/posts 中的 Markdown 文件为准；网页保存和直接修改文件会更新同一份内容。</p>
+            <p className="editor-tip">草稿以 content/drafts 中的本地 Markdown 为准；正式保存会写入 content/posts，通过静态构建后提交并推送到 main。</p>
             <div className="editor-meta">
               <label className="title-field">
                 <span>标题</span>
@@ -653,7 +818,7 @@ export default function Home() {
               </label>
               <label>
                 <span>Slug（文章地址）</span>
-                <input value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: normalizeSlug(event.target.value) })} placeholder="留空则根据标题生成" disabled={Boolean(draft.articleId)} />
+                <input value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: normalizeSlug(event.target.value) })} placeholder="留空则根据标题生成" disabled={Boolean(draft.articleId || draft.draftId)} />
                 {slugDiffersFromTitle && (
                   <small className="slug-hint">标题与 Slug 不同：文章列表将显示标题，链接将继续使用此 Slug。</small>
                 )}
@@ -776,6 +941,7 @@ export default function Home() {
           <a href="#home">首页</a>
           <a href="#archive">文章</a>
           <a href="#about">关于</a>
+          {editorEnabled && <a href="#drafts">草稿箱</a>}
           {editorEnabled && <a href="#editor">编辑器</a>}
         </div>
         <p className="copyright">© 2026 凝泠 · watice’s blog</p>

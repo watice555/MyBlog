@@ -2,12 +2,13 @@ import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
-import { extname, parse, resolve } from "node:path";
+import { extname, parse, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import matter from "gray-matter";
 
 const execFileAsync = promisify(execFile);
 const postRoute = "/api/local-post";
+const draftRoute = "/api/local-draft";
 const imageRoute = "/api/local-image";
 const generateRoute = "/api/local-content-generate";
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
@@ -49,6 +50,13 @@ function normalizeSlug(value) {
     .replace(/^-|-$/g, "");
 }
 
+function formatError(error, fallback) {
+  if (!(error instanceof Error)) return fallback;
+  const stderr = typeof error.stderr === "string" ? error.stderr.trim() : "";
+  const message = stderr || error.message || fallback;
+  return message.length > 1800 ? `${message.slice(0, 1800)}…` : message;
+}
+
 async function readJsonBody(request) {
   const chunks = [];
   let size = 0;
@@ -57,7 +65,11 @@ async function readJsonBody(request) {
     if (size > 2 * 1024 * 1024) throw new Error("文章内容过长，无法保存");
     chunks.push(chunk);
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new Error("请求内容不是有效的 JSON");
+  }
 }
 
 async function readImageBody(request) {
@@ -148,23 +160,29 @@ async function saveImage(request, publicDirectory) {
   };
 }
 
+function articleDate(data, filename, { draft = false } = {}) {
+  const rawDate = data.date instanceof Date
+    ? data.date.toISOString().slice(0, 10)
+    : String(data.date ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) return rawDate;
+  if (draft && !rawDate) return new Date().toISOString().slice(0, 10);
+  throw new Error(`${filename}: Markdown 日期必须使用 YYYY-MM-DD 格式`);
+}
+
+function articleReadTime(body) {
+  return `${Math.max(1, Math.ceil(body.replace(/\s/g, "").length / 400))} 分钟`;
+}
+
 function parseArticle(markdown, filename, expectedSlug) {
   const { data, content } = matter(markdown);
   const id = normalizeSlug(data.slug || parse(filename).name);
-  if (expectedSlug && id !== expectedSlug) {
+  if (!id || (expectedSlug && id !== expectedSlug)) {
     throw new Error("Markdown 中的 slug 与文件名不一致");
   }
 
   const title = String(data.title ?? "").trim();
   if (!title) throw new Error(`${filename}: Markdown 缺少标题`);
-
-  const rawDate = data.date instanceof Date
-    ? data.date.toISOString().slice(0, 10)
-    : String(data.date ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-    throw new Error(`${filename}: Markdown 日期必须使用 YYYY-MM-DD 格式`);
-  }
-
+  const rawDate = articleDate(data, filename);
   const body = content.trim();
   if (!body) throw new Error(`${filename}: Markdown 正文不能为空`);
 
@@ -180,41 +198,182 @@ function parseArticle(markdown, filename, expectedSlug) {
     category: String(data.category ?? "评论").trim() || "评论",
     aiParticipation,
     date: rawDate.replaceAll("-", "."),
-    readTime: `${Math.max(1, Math.ceil(body.replace(/\s/g, "").length / 400))} 分钟`,
+    readTime: articleReadTime(body),
     content: body,
   };
 }
 
-async function findPost(postsDirectory, slug) {
-  const entries = await readdir(postsDirectory, { withFileTypes: true });
+function parseDraft(markdown, filename, expectedSlug) {
+  const { data, content } = matter(markdown);
+  const id = normalizeSlug(data.slug || parse(filename).name);
+  if (!id || (expectedSlug && id !== expectedSlug)) {
+    throw new Error("草稿 Markdown 中的 slug 与文件名不一致");
+  }
+  const rawDate = articleDate(data, filename, { draft: true });
+  const rawAiParticipation = Number(data.aiParticipation ?? 1);
+  const aiParticipation = Number.isInteger(rawAiParticipation) && rawAiParticipation >= 1 && rawAiParticipation <= 5
+    ? rawAiParticipation
+    : 1;
+  const sourceArticleId = normalizeSlug(data.sourceArticle);
+  const body = content.trim();
+
+  return {
+    id,
+    title: String(data.title ?? "").trim(),
+    excerpt: String(data.excerpt ?? "").trim(),
+    category: String(data.category ?? "评论").trim() || "评论",
+    aiParticipation,
+    date: rawDate.replaceAll("-", "."),
+    readTime: articleReadTime(body),
+    content: body,
+    ...(sourceArticleId ? { sourceArticleId } : {}),
+  };
+}
+
+async function findMarkdown(directory, slug, parser) {
+  const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile() || extname(entry.name).toLowerCase() !== ".md") continue;
-    const source = await readFile(resolve(postsDirectory, entry.name), "utf8");
-    const article = parseArticle(source, entry.name);
+    const source = await readFile(resolve(directory, entry.name), "utf8");
+    const article = parser(source, entry.name);
     if (article.id === slug) return { filename: entry.name, article, markdown: source };
   }
   return undefined;
 }
 
-async function listPosts(postsDirectory) {
-  const entries = await readdir(postsDirectory, { withFileTypes: true });
+async function listMarkdown(directory, parser) {
+  await mkdir(directory, { recursive: true });
+  const entries = await readdir(directory, { withFileTypes: true });
   const articles = [];
   for (const entry of entries) {
     if (!entry.isFile() || extname(entry.name).toLowerCase() !== ".md") continue;
-    const source = await readFile(resolve(postsDirectory, entry.name), "utf8");
-    articles.push(parseArticle(source, entry.name));
+    const source = await readFile(resolve(directory, entry.name), "utf8");
+    articles.push(parser(source, entry.name));
   }
-  return articles.sort((left, right) => right.date.localeCompare(left.date));
+  return articles.sort((left, right) => right.date.localeCompare(left.date) || left.title.localeCompare(right.title, "zh-CN"));
 }
 
-export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
+async function atomicWrite(directory, filename, content) {
+  await mkdir(directory, { recursive: true });
+  const temporary = resolve(directory, `.${filename}.${process.pid}.${randomUUID()}.tmp`);
+  await writeFile(temporary, content, { encoding: "utf8", flag: "wx" });
+  try {
+    await rename(temporary, resolve(directory, filename));
+  } catch (error) {
+    await unlink(temporary).catch(() => {});
+    throw error;
+  }
+}
+
+async function markDraftAsPublishedLocally(draftsDirectory, sourceDraft, articleSlug) {
+  const parsed = matter(sourceDraft.markdown);
+  parsed.data.sourceArticle = articleSlug;
+  await atomicWrite(
+    draftsDirectory,
+    sourceDraft.filename,
+    matter.stringify(parsed.content.trim(), parsed.data),
+  );
+}
+
+function referencedPostImages(markdown, projectRoot) {
+  const imagesRoot = resolve(projectRoot, "public", "images", "posts");
+  const paths = new Set();
+  for (const match of markdown.matchAll(/\bimages\/posts\/[^\s)"'<>]+/g)) {
+    let decoded = match[0].replace(/[?#].*$/, "");
+    try {
+      decoded = decodeURIComponent(decoded);
+    } catch {
+      continue;
+    }
+    const absolute = resolve(projectRoot, "public", decoded);
+    if (absolute !== imagesRoot && !absolute.startsWith(`${imagesRoot}${sep}`)) continue;
+    if (existsSync(absolute)) paths.add(relative(projectRoot, absolute));
+  }
+  return [...paths];
+}
+
+async function assertNoOtherPostChanges(projectRoot, intendedPostPath) {
+  const [{ stdout: tracked = "" }, { stdout: untracked = "" }] = await Promise.all([
+    execFileAsync("git", ["diff", "--name-only", "HEAD", "--", "content/posts"], { cwd: projectRoot }),
+    execFileAsync("git", ["ls-files", "--others", "--exclude-standard", "--", "content/posts"], { cwd: projectRoot }),
+  ]);
+  const otherPaths = [...new Set(`${tracked}\n${untracked}`.split(/\r?\n/).filter(Boolean))]
+    .filter((path) => path !== intendedPostPath);
+  if (otherPaths.length) {
+    throw new Error(`还有其他正式文章未提交（${otherPaths.join("、")}），请先处理后再发布，避免混入本次提交`);
+  }
+}
+
+async function publishPostToGit({ projectRoot, filename, markdown, title, isUpdate }) {
+  const intendedPostPath = `content/posts/${filename}`;
+  const { stdout: branchOutput = "" } = await execFileAsync("git", ["branch", "--show-current"], { cwd: projectRoot });
+  const branch = branchOutput.trim();
+  if (branch !== "main") {
+    throw new Error(`当前分支是 ${branch || "游离 HEAD"}，请切换到 main 后再正式发布`);
+  }
+
+  await assertNoOtherPostChanges(projectRoot, intendedPostPath);
+
+  try {
+    await execFileAsync("npm", ["run", "build:github"], {
+      cwd: projectRoot,
+      maxBuffer: 12 * 1024 * 1024,
+      timeout: 5 * 60 * 1000,
+    });
+  } catch (error) {
+    throw new Error(`发布前的静态构建未通过：${formatError(error, "构建失败")}`);
+  }
+
+  const paths = [intendedPostPath, "app/generated-posts.ts", ...referencedPostImages(markdown, projectRoot)];
+  try {
+    await execFileAsync("git", ["add", "--", ...paths], { cwd: projectRoot });
+    const { stdout: stagedOutput = "" } = await execFileAsync(
+      "git",
+      ["diff", "--cached", "--name-only", "--", ...paths],
+      { cwd: projectRoot },
+    );
+    if (stagedOutput.trim()) {
+      const cleanTitle = title.replace(/[\r\n]+/g, " ").trim().slice(0, 72);
+      const message = `${isUpdate ? "Update" : "Publish"} ${cleanTitle || filename}`;
+      await execFileAsync("git", ["commit", "--only", "-m", message, "--", ...paths], {
+        cwd: projectRoot,
+        maxBuffer: 4 * 1024 * 1024,
+      });
+    }
+  } catch (error) {
+    await execFileAsync("git", ["reset", "-q", "HEAD", "--", ...paths], { cwd: projectRoot }).catch(() => {});
+    throw new Error(`文章已经写入，但 Git 提交失败：${formatError(error, "提交失败")}`);
+  }
+
+  const { stdout: commitOutput = "" } = await execFileAsync("git", ["rev-parse", "--short", "HEAD"], { cwd: projectRoot });
+  const commit = commitOutput.trim();
+  try {
+    await execFileAsync("git", ["push", "origin", "main"], {
+      cwd: projectRoot,
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 2 * 60 * 1000,
+    });
+    return { commit, pushed: true };
+  } catch (error) {
+    return {
+      commit,
+      pushed: false,
+      error: `文章已提交为 ${commit}，但推送失败；草稿仍保留，可稍后再次正式保存：${formatError(error, "推送失败")}`,
+    };
+  }
+}
+
+export default function createLocalPostsPlugin(projectRoot = process.cwd(), options = {}) {
   const postsDirectory = resolve(projectRoot, "content", "posts");
+  const draftsDirectory = resolve(projectRoot, "content", "drafts");
   const publicDirectory = resolve(projectRoot, "public");
+  const generatedPath = resolve(projectRoot, "app", "generated-posts.ts");
   const generatorPath = resolve(projectRoot, "scripts", "generate-posts.mjs");
+  const publishPost = options.publishPost || publishPostToGit;
   let generatedSourceHash = "";
 
   async function loadPostsFromFiles({ forceGenerate = false } = {}) {
-    const articles = await listPosts(postsDirectory);
+    const articles = await listMarkdown(postsDirectory, parseArticle);
     const sourceHash = createHash("sha256").update(JSON.stringify(articles)).digest("hex");
     if (forceGenerate || sourceHash !== generatedSourceHash) {
       await execFileAsync(process.execPath, [generatorPath], { cwd: projectRoot });
@@ -223,13 +382,27 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
     return articles;
   }
 
+  async function restorePublishedFiles(existingPost, destination, previousGeneratedSource) {
+    if (existingPost) {
+      await atomicWrite(postsDirectory, existingPost.filename, existingPost.markdown);
+    } else {
+      await unlink(destination).catch(() => {});
+    }
+    if (previousGeneratedSource === undefined) {
+      await unlink(generatedPath).catch(() => {});
+    } else {
+      await atomicWrite(resolve(projectRoot, "app"), "generated-posts.ts", previousGeneratedSource);
+    }
+    generatedSourceHash = "";
+  }
+
   return {
     name: "local-post-writer",
     enforce: "pre",
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
         const pathname = new URL(request.url || "/", "http://localhost").pathname;
-        if (pathname !== postRoute && pathname !== imageRoute && pathname !== generateRoute) return next();
+        if (![postRoute, draftRoute, imageRoute, generateRoute].includes(pathname)) return next();
         if (!isAllowedHost(request.headers.host)) {
           sendJson(response, 403, { error: "只允许通过本机回环地址使用博客编辑器" });
           return;
@@ -238,21 +411,21 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
           sendJson(response, 403, { error: "只允许从本机博客编辑器发起请求" });
           return;
         }
+
         if (pathname === generateRoute) {
           if (request.method !== "POST") {
             sendJson(response, 405, { error: "只支持 POST 请求" });
             return;
           }
           try {
-            await mkdir(postsDirectory, { recursive: true });
             const articles = await loadPostsFromFiles({ forceGenerate: true });
             sendJson(response, 200, { articles, count: articles.length });
           } catch (error) {
-            const message = error instanceof Error ? error.message : "文章列表生成失败";
-            sendJson(response, 500, { error: message });
+            sendJson(response, 500, { error: formatError(error, "文章列表生成失败") });
           }
           return;
         }
+
         if (pathname === imageRoute) {
           if (request.method !== "POST") {
             sendJson(response, 405, { error: "只支持 POST 请求" });
@@ -261,18 +434,62 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
           try {
             sendJson(response, 200, await saveImage(request, publicDirectory));
           } catch (error) {
-            const message = error instanceof Error ? error.message : "图片保存失败";
-            sendJson(response, 400, { error: message });
+            sendJson(response, 400, { error: formatError(error, "图片保存失败") });
           }
           return;
         }
+
+        if (pathname === draftRoute) {
+          if (request.method === "GET") {
+            try {
+              const drafts = await listMarkdown(draftsDirectory, parseDraft);
+              sendJson(response, 200, { drafts, count: drafts.length });
+            } catch (error) {
+              sendJson(response, 500, { error: formatError(error, "草稿箱读取失败") });
+            }
+            return;
+          }
+          if (request.method !== "POST") {
+            sendJson(response, 405, { error: "只支持 GET 和 POST 请求" });
+            return;
+          }
+          try {
+            const input = await readJsonBody(request);
+            const slug = normalizeSlug(input.slug);
+            const markdown = String(input.markdown ?? "");
+            if (!slug || slug !== input.slug) {
+              sendJson(response, 400, { error: "请填写有效的 slug" });
+              return;
+            }
+            const draft = parseDraft(markdown, `${slug}.md`, slug);
+            await mkdir(draftsDirectory, { recursive: true });
+            const existingDraft = await findMarkdown(draftsDirectory, slug, parseDraft);
+            if (existingDraft && !input.overwrite) {
+              sendJson(response, 409, {
+                error: "草稿箱中已有相同 slug 的草稿，未执行覆盖",
+                filename: existingDraft.filename,
+                draft: existingDraft.article,
+              });
+              return;
+            }
+            const filename = existingDraft?.filename || `${slug}.md`;
+            if (!existingDraft && existsSync(resolve(draftsDirectory, filename))) {
+              sendJson(response, 409, { error: `草稿文件 ${filename} 已存在，未执行覆盖` });
+              return;
+            }
+            await atomicWrite(draftsDirectory, filename, markdown);
+            sendJson(response, 200, { filename, draft });
+          } catch (error) {
+            sendJson(response, 400, { error: formatError(error, "草稿保存失败") });
+          }
+          return;
+        }
+
         if (request.method === "GET") {
           try {
-            await mkdir(postsDirectory, { recursive: true });
             sendJson(response, 200, { articles: await loadPostsFromFiles() });
           } catch (error) {
-            const message = error instanceof Error ? error.message : "文章列表读取失败";
-            sendJson(response, 500, { error: message });
+            sendJson(response, 500, { error: formatError(error, "文章列表读取失败") });
           }
           return;
         }
@@ -281,6 +498,10 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
           return;
         }
 
+        let existingPost;
+        let destination;
+        let previousGeneratedSource;
+        let wrotePost = false;
         try {
           const input = await readJsonBody(request);
           const slug = normalizeSlug(input.slug);
@@ -292,7 +513,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
           const article = parseArticle(markdown, `${slug}.md`, slug);
 
           await mkdir(postsDirectory, { recursive: true });
-          const existingPost = await findPost(postsDirectory, slug);
+          existingPost = await findMarkdown(postsDirectory, slug, parseArticle);
           if (existingPost && !input.overwrite) {
             sendJson(response, 409, {
               error: "这个 slug 已有正式文章，未执行覆盖",
@@ -303,33 +524,61 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd()) {
           }
 
           const filename = existingPost?.filename || `${slug}.md`;
-          const destination = resolve(postsDirectory, filename);
+          destination = resolve(postsDirectory, filename);
           if (!existingPost && existsSync(destination)) {
             sendJson(response, 409, { error: `文件 ${filename} 已存在，未执行覆盖` });
             return;
           }
 
-          const temporary = resolve(postsDirectory, `.${slug}.${process.pid}.tmp`);
-          await writeFile(temporary, markdown, "utf8");
-          await rename(temporary, destination);
-          try {
-            const articles = await loadPostsFromFiles();
-            const savedArticle = articles.find((item) => item.id === slug) || article;
-            sendJson(response, 200, { filename, article: savedArticle });
-          } catch (error) {
-            if (existingPost) {
-              const rollback = resolve(postsDirectory, `.${slug}.${process.pid}.rollback.tmp`);
-              await writeFile(rollback, existingPost.markdown, "utf8");
-              await rename(rollback, destination);
-            } else {
-              await unlink(destination);
+          previousGeneratedSource = existsSync(generatedPath) ? await readFile(generatedPath, "utf8") : undefined;
+          await atomicWrite(postsDirectory, filename, markdown);
+          wrotePost = true;
+          const articles = await loadPostsFromFiles();
+          const savedArticle = articles.find((item) => item.id === slug) || article;
+          const publishResult = await publishPost({
+            projectRoot,
+            filename,
+            markdown,
+            title: savedArticle.title,
+            isUpdate: Boolean(existingPost),
+          });
+          // A returned result may already represent a local commit, so later cleanup
+          // failures must never roll published files back.
+          wrotePost = false;
+          if (!publishResult.pushed) {
+            const sourceDraftSlug = normalizeSlug(input.sourceDraftSlug);
+            if (sourceDraftSlug && sourceDraftSlug === input.sourceDraftSlug) {
+              const sourceDraft = await findMarkdown(draftsDirectory, sourceDraftSlug, parseDraft).catch(() => undefined);
+              if (sourceDraft) {
+                await markDraftAsPublishedLocally(draftsDirectory, sourceDraft, slug).catch(() => {});
+              }
             }
-            generatedSourceHash = "";
-            throw error;
+            sendJson(response, 502, {
+              filename,
+              article: savedArticle,
+              commit: publishResult.commit,
+              pushed: false,
+              error: publishResult.error || "Git 推送失败",
+            });
+            return;
           }
+
+          const sourceDraftSlug = normalizeSlug(input.sourceDraftSlug);
+          if (sourceDraftSlug && sourceDraftSlug === input.sourceDraftSlug) {
+            const sourceDraft = await findMarkdown(draftsDirectory, sourceDraftSlug, parseDraft).catch(() => undefined);
+            if (sourceDraft) await unlink(resolve(draftsDirectory, sourceDraft.filename)).catch(() => {});
+          }
+          sendJson(response, 200, {
+            filename,
+            article: savedArticle,
+            commit: publishResult.commit,
+            pushed: true,
+          });
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Markdown 保存失败";
-          sendJson(response, 500, { error: message });
+          if (wrotePost && destination) {
+            await restorePublishedFiles(existingPost, destination, previousGeneratedSource).catch(() => {});
+          }
+          sendJson(response, 500, { error: formatError(error, "Markdown 发布失败") });
         }
       });
     },
