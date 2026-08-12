@@ -1,29 +1,23 @@
 ---
 slug: "minimax-h3-本地部署和使用"
-title: "在 Mac 上用 H3 Studio 部署和使用 MiniMax-H3"
+title: "在 Mac 上用 h3.c 部署和使用 MiniMax-H3"
 date: "2026-08-12"
 category: "科技笔记"
 aiParticipation: 3
-excerpt: "从零安装 H3 Studio、下载 MiniMax-H3 官方 FL2VA 权重，并在 Apple Silicon Mac 上通过本机 GUI 或命令行生成带声音视频的完整教程。"
+excerpt: "从零下载、编译并使用 antirez 的 h3.c，在 Apple Silicon Mac 上运行 MiniMax-H3 官方模型并生成带声音视频。"
 ---
-# 从零开始：在 Mac 上用 H3 Studio 运行 MiniMax-H3
+# 从零开始：在 Mac 上用 h3.c 运行 MiniMax-H3
 
-这是一份面向第一次接触 MiniMax-H3 的教程。目标是从一台刚准备好的 Apple Silicon
-Mac 出发，安装 [H3 Studio](https://github.com/watice555/h3.c-studio)、下载官方模型、
-编译检查，并通过图形界面或命令行生成第一条带声音的视频。
+这是一份面向第一次接触 h3.c 和 MiniMax-H3 的教程。目标是从一台刚准备好的
+Apple Silicon Mac 出发，下载并编译 antirez 开发的 h3.c、取得官方模型权重，
+完成部署检查，并用原生命令行生成第一条带声音的视频。
 
 文末另有一节迁移经验，说明已经持有 ComfyUI 或其他重打包权重时容易遇到的坑。
 如果是全新安装，直接按正文使用官方 checkpoint，不需要转换权重或修改源码。
 
-H3 Studio 是本教程配套的非官方 fork：它完整保留 antirez 的 h3.c 原生推理能力，
-并增加中英双语本机 Web GUI、任务日志与播放、提示词优化，以及少量社区 checkpoint
-兼容工具。它不隶属于 antirez、MiniMax、Hugging Face、Ollama 或任何 API 服务商，
-仓库不包含模型权重。
-
 相关项目：
 
-- [H3 Studio fork](https://github.com/watice555/h3.c-studio)
-- [antirez/h3.c 上游项目](https://github.com/antirez/h3.c)
+- [antirez/h3.c](https://github.com/antirez/h3.c)
 - [MiniMax-H3 官方模型](https://huggingface.co/MiniMaxAI/MiniMax-H3)
 - [MiniMax-H3 官方提示词指南](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md)
 - [Hugging Face CLI 文档](https://huggingface.co/docs/huggingface_hub/en/guides/cli)
@@ -149,15 +143,16 @@ hf --help
 
 `hf` 只负责下载模型；下载完成后，日常视频推理不依赖它。
 
-## 4. 下载并编译 H3 Studio
+## 4. 下载并编译 h3.c
 
-下面把项目放进 `~/AI/h3.c-studio`。也可以换成自己的目录，但后续命令要相应修改。
+下面把 antirez 的原始项目放进 `~/AI/h3.c`。也可以换成自己的目录，但后续命令要
+相应修改。
 
 ```bash
 mkdir -p ~/AI
 cd ~/AI
-git clone https://github.com/watice555/h3.c-studio.git
-cd h3.c-studio
+git clone https://github.com/antirez/h3.c.git
+cd h3.c
 make -j8
 mkdir -p outputs
 ```
@@ -174,10 +169,6 @@ mkdir -p outputs
 一个容易忽略的细节：运行 h3 时最好先进入项目根目录。程序需要读取这里的
 `h3_shaders.metal`，从其他目录直接运行可能找不到 Metal shader。
 
-H3 Studio 是 h3.c 的 fork，不是另一个推理引擎。`./h3`、Metal kernel 和核心命令行
-仍来自 h3.c；`gui/` 与 `start_h3_gui.command` 是 fork 增加的本机界面。只想使用
-antirez 的纯命令行上游也可以 clone 原仓库，但那份仓库不含本教程后面的 GUI。
-
 ## 5. 下载官方 FL2VA 模型
 
 初次使用只下载 `FL2VA/` 即可。它支持：
@@ -189,7 +180,7 @@ antirez 的纯命令行上游也可以 clone 原仓库，但那份仓库不含�
 先进入项目目录：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 ```
 
 ### 5.1 最简单：下载整个 FL2VA 目录
@@ -246,7 +237,7 @@ safetensors，但保留官方索引能维持 checkpoint 的完整结构，也兼
 只想下载最小运行集时，可以明确限制路径：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 
 hf download MiniMaxAI/MiniMax-H3 \
   --include "FL2VA/transformer/*.json" \
@@ -274,7 +265,7 @@ hf download MiniMaxAI/MiniMax-H3 \
 推荐只让一条命令使用镜像：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 
 HF_ENDPOINT=https://hf-mirror.com \
 hf download MiniMaxAI/MiniMax-H3 \
@@ -352,7 +343,7 @@ Text Encoder 分片、1 个 Video VAE 和 1 个 Audio VAE。文件数只能发�
 下载完成后，关键结构应类似：
 
 ```text
-h3.c-studio/
+h3.c/
 ├── h3
 ├── h3_shaders.metal
 ├── MiniMax-H3/
@@ -383,7 +374,7 @@ h3.c-studio/
 运行：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 ./h3 --info -d ./MiniMax-H3
 ```
 
@@ -413,7 +404,7 @@ make -j8 h3_tokenizer_tests
 运动和声音都是有意义的：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 
 ./h3 --profile \
   -d ./MiniMax-H3 \
@@ -632,7 +623,7 @@ FL2VA 本身就支持首尾帧，不需要下载 Ref2VA。
 需要这些功能时，再下载 Ref2VA：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 hf download MiniMaxAI/MiniMax-H3 \
   --include "Ref2VA/*" \
   --local-dir MiniMax-H3
@@ -643,70 +634,45 @@ hf download MiniMaxAI/MiniMax-H3 \
 
 首尾帧锚点和 Ref2VA ordered references 不能在同一次生成中混用。
 
-## 14. H3 Studio 本机 Web GUI
+## 14. 可选：在 h3.c 上使用 H3 Studio 图形界面
 
-h3.c 上游主要提供命令行。H3 Studio fork 在上游代码基础上增加了一个只依赖 Python
-标准库的轻量 GUI；直接从 antirez 上游 clone 的纯净项目不包含这些 GUI 文件。
+前面全部步骤都围绕 antirez 的 h3.c，命令行已经能够完整生成视频，并不依赖额外
+界面。如果更习惯浏览器表单，可以改用非官方的
+[H3 Studio fork](https://github.com/watice555/h3.c-studio)。它没有替代或重新实现
+h3.c，只是在 h3.c 之上做了一点很小的辅助工作：增加中英双语本机 Web GUI、参数
+预设、任务日志、取消与输出播放，以及可选的提示词整理。
 
-完成前面的编译和模型下载后，在 Finder 中打开 `h3.c-studio` 文件夹并双击：
+这个 fork 不隶属于 antirez、MiniMax、Hugging Face、Ollama 或任何 API 服务商，
+也不包含模型权重。`./h3`、Metal kernel、模型加载和实际推理仍由 h3.c 完成。
 
-```text
-start_h3_gui.command
-```
-
-或执行：
+如果决定使用 GUI，可以从一开始就 clone fork；前面的编译、模型下载和命令行用法
+全部保持不变：
 
 ```bash
+git clone https://github.com/watice555/h3.c-studio.git ~/AI/h3.c-studio
 cd ~/AI/h3.c-studio
+make -j8
 ./start_h3_gui.command
 ```
 
-启动器会在缺少 `h3` 时自动编译，然后打开浏览器。GUI 从 `127.0.0.1:7860` 开始
-自动寻找可用端口，提供中英文界面、质量预设、参数表单、实时日志、取消任务和输出
-播放。它只监听本机回环地址，不会把生成服务暴露到局域网；所有视频仍写入
-`outputs/`。
-
-第一次生成建议这样操作：
-
-1. 选择“快速预览”或“日常平衡”，不要一开始就选原生 768p；
-2. 输入主体、动作、场景、镜头、画面风格、声音和限制；
-3. 如未配置提示词模型，直接点击“开始生成”即可；
-4. 在右侧观察阶段、日志和耗时，完成后直接播放 MP4；
-5. 内容正确后，再逐步增加分辨率、时长或 steps。
-
-提示词优化默认调用本机 Ollama，也可以通过环境变量连接本机或云端的 OpenAI Chat
-Completions 兼容 API。它会把随意输入整理成符合官方指南的英文提示词，再单独生成
-中文翻译供预览。只有英文稿会进入 h3；中文翻译不会参与生成。语言模型是可选增强项，
-不是 h3.c 的运行依赖。
-
-例如使用本机 Ollama 的另一个模型：
+模型仍放在仓库根目录的 `MiniMax-H3/`。如果已经在纯净 h3.c 目录下载了权重，不必
+重新下载，可以在核对路径后移动目录或建立软链接：
 
 ```bash
-cd ~/AI/h3.c-studio
-H3_PROMPT_MODEL='qwen3:32b' ./start_h3_gui.command
+ln -s ~/AI/h3.c/MiniMax-H3 ~/AI/h3.c-studio/MiniMax-H3
 ```
 
-使用 LM Studio、llama.cpp、vLLM、MLX LM server 或其他 OpenAI Chat Completions
-兼容服务：
-
-```bash
-cd ~/AI/h3.c-studio
-H3_PROMPT_PROVIDER='openai' \
-H3_PROMPT_BASE_URL='http://127.0.0.1:1234/v1' \
-H3_PROMPT_MODEL='服务端显示的模型名称' \
-./start_h3_gui.command
-```
-
-远程 API 还需要在当前终端设置 `H3_PROMPT_API_KEY`，并使用 HTTPS 地址。不要把密钥
-写进脚本或 Git。完整配置、安全边界和测试方法参见
+软链接前先确认目标目录不存在。GUI 只监听本机地址，自动寻找空闲端口，视频仍由
+h3.c 生成到 `outputs/`。提示词优化可以接 Ollama 或 OpenAI 兼容 API，但只是可选
+功能，不是 h3.c 的运行依赖。具体界面与配置方法参见
 [H3 Studio GUI 中文说明](https://github.com/watice555/h3.c-studio/blob/main/gui/README.zh-CN.md)。
 
-## 15. 更新 H3 Studio 与同步 h3.c 上游
+## 15. 更新 h3.c
 
-普通使用者更新 fork 只需：
+使用 antirez 原始仓库时：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 git status
 git pull --ff-only
 make -j8
@@ -716,29 +682,6 @@ make -j8
 更新前先看 `git status`。如果有自己的源码修改，先提交或另行保存，不要覆盖目录或
 强制清理。模型和输出位于被忽略的目录中，正常的 `git pull` 不会重新下载它们。
 
-如果要参与维护 H3 Studio、主动吸收 antirez 的最新提交，再额外配置 `upstream`：
-
-```bash
-cd ~/AI/h3.c-studio
-git remote add upstream https://github.com/antirez/h3.c.git
-git status
-git fetch upstream
-git rebase upstream/main
-make -j8
-```
-
-若 `upstream` 已存在，`git remote add` 只需执行一次。用下面的命令确认：
-
-```bash
-git remote -v
-```
-
-这里的 `origin` 应指向 H3 Studio fork，`upstream` 指向 `antirez/h3.c`。普通使用者
-不需要执行 rebase；等待 H3 Studio 发布同步后的提交再 `git pull --ff-only` 更省心。
-
-如果上游和 H3 Studio 修改了相同区域，Git 会停下来要求解决冲突。确认测试通过后再把
-同步结果推送到自己的 fork，不要向 antirez 上游仓库直接推送。
-
 ## 16. 常见问题
 
 ### 编译后没有 `h3`
@@ -746,7 +689,7 @@ git remote -v
 回到项目目录重新编译并留意第一条报错：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 make clean
 make -j8
 ```
@@ -756,7 +699,7 @@ make -j8
 说明运行目录不对：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 ./h3 --info -d ./MiniMax-H3
 ```
 
@@ -813,16 +756,9 @@ command -v ffprobe
 第三类最隐蔽：程序可以完整跑完，`--info` 也没有错误，但生成结果只有马赛克、灰色
 纹理或噪声。原因不是步数或提示词，而是 tensor 内部行排列错误。
 
-这份本地项目因此保留了：
-
-```text
-tools/convert_h3_qkv_to_official_layout.py
-tools/convert_safetensors_f16_to_f32.py
-H3 Studio loader compatibility fallbacks
-```
-
-它们分别用于 QKV 重排、Video VAE FP16→FP32 和 Qwen/Audio VAE loader 兼容。
-这些都是“复用特殊旧权重”的迁移工具，不是从零部署 h3.c 的标准步骤。
+这些问题需要针对具体 repack 检查 tensor 名、精度与内部布局，必要时编写一次性转换
+工具或调整 loader。但这属于旧权重迁移，不是从零部署 h3.c 的标准步骤；对新用户
+而言，直接下载 MiniMax 官方 checkpoint 更简单可靠。
 
 迁移旧权重时最重要的经验是：
 
@@ -858,19 +794,18 @@ find MiniMax-H3 -type f -name '*.safetensors' -maxdepth 5 -print
 xcode-select --install
 brew install git ffmpeg hf
 mkdir -p ~/AI
-git clone https://github.com/watice555/h3.c-studio.git ~/AI/h3.c-studio
-cd ~/AI/h3.c-studio
+git clone https://github.com/antirez/h3.c.git ~/AI/h3.c
+cd ~/AI/h3.c
 make -j8
 mkdir -p outputs
 hf download MiniMaxAI/MiniMax-H3 --include "FL2VA/*" --local-dir MiniMax-H3
 ./h3 --info -d ./MiniMax-H3
-./start_h3_gui.command
 ```
 
 日常使用：
 
 ```bash
-cd ~/AI/h3.c-studio
+cd ~/AI/h3.c
 ./h3 --profile \
   -d ./MiniMax-H3 \
   -p "主体、动作、场景、镜头、画风、声音和限制" \
