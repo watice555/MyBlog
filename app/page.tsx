@@ -76,6 +76,20 @@ type ImageSaveResponse = {
   error?: string;
 };
 
+type RecoverySnapshot = {
+  draft: Draft;
+  savedAt: string;
+};
+
+type RecoveryResponse = {
+  recovery?: RecoverySnapshot | null;
+  deleted?: boolean;
+  error?: string;
+};
+
+type RecoveryGateStatus = "idle" | "checking" | "ready" | "needs-action" | "error";
+type RecoveryAction = "draft" | "post" | "discard" | null;
+
 type View =
   | { name: "home" | "archive" | "about" | "drafts" }
   | { name: "editor"; id?: string; draftId?: string }
@@ -91,6 +105,20 @@ const emptyDraft: Draft = {
   aiParticipation: 1,
   content: "",
 };
+
+function draftSignature(draft: Draft) {
+  return JSON.stringify(draft);
+}
+
+function recoveryFallbackSlug(savedAt: string) {
+  return `recovered-${savedAt.slice(0, 19).replace(/\D+/g, "-")}`;
+}
+
+function formatRecoveryTime(savedAt: string) {
+  const date = new Date(savedAt);
+  if (Number.isNaN(date.getTime())) return savedAt;
+  return date.toLocaleString("zh-CN", { hour12: false });
+}
 
 function localEditorAvailable() {
   if (typeof window === "undefined") return false;
@@ -225,10 +253,22 @@ export default function Home() {
   const [savingMarkdown, setSavingMarkdown] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [recovery, setRecovery] = useState<RecoverySnapshot | null>(null);
+  const [recoveryGateStatus, setRecoveryGateStatus] = useState<RecoveryGateStatus>("idle");
+  const [recoveryError, setRecoveryError] = useState("");
+  const [recoveryAction, setRecoveryAction] = useState<RecoveryAction>(null);
+  const [autosaveNotice, setAutosaveNotice] = useState("每 10 秒自动保存临时文件");
+  const [autosaveFailed, setAutosaveFailed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const markdownTextareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef<Draft>(draft);
+  const autosaveBaselineRef = useRef(draftSignature(emptyDraft));
+  const lastAutosavedSignatureRef = useRef("");
+  const autosaveInFlightRef = useRef<Promise<void> | null>(null);
+  const autosavePausedRef = useRef(false);
+  const previousViewNameRef = useRef<View["name"]>("home");
   const localAiEnabled = process.env.NODE_ENV === "development";
   const slugDiffersFromTitle = Boolean(
     draft.title.trim() &&
@@ -287,6 +327,89 @@ export default function Home() {
     return result;
   }, []);
 
+  const loadDraftIntoEditor = useCallback((nextDraft: Draft) => {
+    const signature = draftSignature(nextDraft);
+    draftRef.current = nextDraft;
+    autosaveBaselineRef.current = signature;
+    lastAutosavedSignatureRef.current = "";
+    setDraft(nextDraft);
+    setAutosaveFailed(false);
+    setAutosaveNotice("每 10 秒自动保存临时文件");
+  }, []);
+
+  const checkRecoveryFile = useCallback(async () => {
+    autosavePausedRef.current = true;
+    setRecoveryGateStatus("checking");
+    setRecoveryError("");
+    setRecoveryAction(null);
+    try {
+      const response = await fetch("/api/local-recovery", { cache: "no-store" });
+      const result = await response.json() as RecoveryResponse;
+      if (!response.ok) throw new Error(result.error || "无法读取编辑器临时文件");
+      if (result.recovery) {
+        setRecovery(result.recovery);
+        setRecoveryGateStatus("needs-action");
+        return;
+      }
+      setRecovery(null);
+      setRecoveryGateStatus("ready");
+      autosavePausedRef.current = false;
+    } catch (error) {
+      setRecovery(null);
+      setRecoveryError(error instanceof Error ? error.message : "无法读取编辑器临时文件");
+      setRecoveryGateStatus("error");
+    }
+  }, []);
+
+  const deleteRecoveryFile = useCallback(async () => {
+    if (autosaveInFlightRef.current) await autosaveInFlightRef.current;
+    const response = await fetch("/api/local-recovery", { method: "DELETE" });
+    const result = await response.json() as RecoveryResponse;
+    if (!response.ok || result.deleted !== true) {
+      throw new Error(result.error || "临时文件删除失败");
+    }
+    lastAutosavedSignatureRef.current = "";
+  }, []);
+
+  const writeRecoveryFile = useCallback((targetDraft: Draft) => {
+    const signature = draftSignature(targetDraft);
+    if (
+      autosavePausedRef.current ||
+      autosaveInFlightRef.current ||
+      signature === autosaveBaselineRef.current ||
+      signature === lastAutosavedSignatureRef.current
+    ) return;
+
+    setAutosaveFailed(false);
+    setAutosaveNotice("正在自动保存临时文件…");
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/local-recovery", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draft: targetDraft }),
+        });
+        const result = await response.json() as RecoveryResponse;
+        if (!response.ok || !result.recovery) {
+          throw new Error(result.error || "临时文件自动保存失败");
+        }
+        lastAutosavedSignatureRef.current = signature;
+        setAutosaveNotice(`临时文件已保存 · ${new Date(result.recovery.savedAt).toLocaleTimeString("zh-CN", { hour12: false })}`);
+      } catch (error) {
+        setAutosaveFailed(true);
+        setAutosaveNotice(error instanceof Error ? `自动保存失败：${error.message}` : "临时文件自动保存失败");
+      }
+    })();
+    autosaveInFlightRef.current = request;
+    void request.finally(() => {
+      if (autosaveInFlightRef.current === request) autosaveInFlightRef.current = null;
+    });
+  }, []);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
   useEffect(() => {
     const syncRoute = () => setView(routeFromHash());
     syncRoute();
@@ -320,62 +443,111 @@ export default function Home() {
   }, [refreshDraftArticles, refreshProjectArticles]);
 
   useEffect(() => {
+    const enteredEditor = view.name === "editor" && previousViewNameRef.current !== "editor";
+    previousViewNameRef.current = view.name;
+
+    if (view.name !== "editor") {
+      autosavePausedRef.current = true;
+      return;
+    }
+    if (editorEnabled && (enteredEditor || recoveryGateStatus === "idle")) void checkRecoveryFile();
+  }, [checkRecoveryFile, editorEnabled, recoveryGateStatus, view.name]);
+
+  useEffect(() => {
+    if (!editorEnabled || view.name !== "editor" || recoveryGateStatus !== "ready") return;
+    const interval = window.setInterval(() => writeRecoveryFile(draftRef.current), 10_000);
+    return () => window.clearInterval(interval);
+  }, [editorEnabled, recoveryGateStatus, view.name, writeRecoveryFile]);
+
+  useEffect(() => {
+    if (!editorEnabled || view.name !== "editor") return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      if (draftSignature(draftRef.current) === autosaveBaselineRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [editorEnabled, view.name]);
+
+  useEffect(() => {
     const restoreEditorDraft = () => {
       const currentView = routeFromHash();
       if (currentView.name !== "editor") return;
       if (currentView.draftId) {
         const savedDraft = draftArticles.find((candidate) => candidate.id === currentView.draftId);
         if (!savedDraft) return;
-        setDraft((current) => current.draftId === savedDraft.id ? current : draftFromDraftArticle(savedDraft));
+        if (draftRef.current.draftId !== savedDraft.id) loadDraftIntoEditor(draftFromDraftArticle(savedDraft));
         return;
       }
       if (currentView.id) {
         const article = articles.find((candidate) => candidate.id === currentView.id);
         if (!article) return;
-        setDraft((current) => current.articleId === article.id && !current.draftId ? current : draftFromArticle(article));
+        if (draftRef.current.articleId !== article.id || draftRef.current.draftId) {
+          loadDraftIntoEditor(draftFromArticle(article));
+        }
       }
     };
 
     restoreEditorDraft();
     window.addEventListener("hashchange", restoreEditorDraft);
     return () => window.removeEventListener("hashchange", restoreEditorDraft);
-  }, [articles, draftArticles]);
+  }, [articles, draftArticles, loadDraftIntoEditor]);
 
   const notify = (message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(""), 2200);
   };
 
-  const editArticle = (article: Article) => {
+  const clearRecoveryBeforeReplacement = async () => {
+    if (draftSignature(draftRef.current) === autosaveBaselineRef.current) return true;
+    autosavePausedRef.current = true;
+    try {
+      await deleteRecoveryFile();
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "无法清理当前临时文件");
+      autosavePausedRef.current = false;
+      return false;
+    }
+  };
+
+  const editArticle = async (article: Article) => {
     const hasOtherDraft = Boolean(
       draft.articleId !== article.id &&
       (draft.title.trim() || draft.excerpt.trim() || draft.content.trim()),
     );
     if (hasOtherDraft && !window.confirm("打开这篇文章会替换当前草稿，是否继续？")) return;
+    if (hasOtherDraft && !await clearRecoveryBeforeReplacement()) return;
 
-    setDraft(draftFromArticle(article));
+    loadDraftIntoEditor(draftFromArticle(article));
+    autosavePausedRef.current = false;
     setProofreadingSuggestions("");
-    window.location.hash = `editor/${encodeURIComponent(article.id)}`;
+    window.location.assign(`#editor/${encodeURIComponent(article.id)}`);
   };
 
-  const editSavedDraft = (savedDraft: DraftArticle) => {
+  const editSavedDraft = async (savedDraft: DraftArticle) => {
     const hasOtherDraft = Boolean(
       draft.draftId !== savedDraft.id &&
       (draft.title.trim() || draft.excerpt.trim() || draft.content.trim()),
     );
     if (hasOtherDraft && !window.confirm("打开这份草稿会替换当前编辑内容，是否继续？")) return;
+    if (hasOtherDraft && !await clearRecoveryBeforeReplacement()) return;
 
-    setDraft(draftFromDraftArticle(savedDraft));
+    loadDraftIntoEditor(draftFromDraftArticle(savedDraft));
+    autosavePausedRef.current = false;
     setProofreadingSuggestions("");
     window.location.assign(`#editor/draft/${encodeURIComponent(savedDraft.id)}`);
   };
 
-  const startNewDraft = () => {
+  const startNewDraft = async () => {
     const hasDraft = Boolean(draft.title.trim() || draft.excerpt.trim() || draft.content.trim());
     if (hasDraft && !window.confirm("开始新文章会清空当前编辑内容，是否继续？")) return;
-    setDraft({ ...emptyDraft });
+    if (hasDraft && !await clearRecoveryBeforeReplacement()) return;
+    loadDraftIntoEditor({ ...emptyDraft });
+    autosavePausedRef.current = false;
     setProofreadingSuggestions("");
-    window.location.hash = "editor";
+    window.location.assign("#editor");
   };
 
   const requestLocalAi = async (task: "summary" | "proofread") => {
@@ -503,42 +675,45 @@ export default function Home() {
     }
   };
 
-  const markdownForDraft = (slug: string, { includeSourceArticle = false } = {}) => {
-    const date = draft.originalDate?.replaceAll(".", "-") || new Date().toISOString().slice(0, 10);
+  const markdownForDraft = (targetDraft: Draft, slug: string, { includeSourceArticle = false } = {}) => {
+    const date = targetDraft.originalDate?.replaceAll(".", "-") || new Date().toISOString().slice(0, 10);
     return [
       "---",
       `slug: ${JSON.stringify(slug)}`,
-      `title: ${JSON.stringify(draft.title.trim())}`,
+      `title: ${JSON.stringify(targetDraft.title.trim())}`,
       `date: ${JSON.stringify(date)}`,
-      `category: ${JSON.stringify(draft.category.trim() || "评论")}`,
-      `aiParticipation: ${draft.aiParticipation}`,
-      `excerpt: ${JSON.stringify(draft.excerpt.trim())}`,
-      ...(includeSourceArticle && draft.articleId
-        ? [`sourceArticle: ${JSON.stringify(draft.articleId)}`]
+      `category: ${JSON.stringify(targetDraft.category.trim() || "评论")}`,
+      `aiParticipation: ${targetDraft.aiParticipation}`,
+      `excerpt: ${JSON.stringify(targetDraft.excerpt.trim())}`,
+      ...(includeSourceArticle && targetDraft.articleId
+        ? [`sourceArticle: ${JSON.stringify(targetDraft.articleId)}`]
         : []),
       "---",
       "",
-      draft.content,
+      targetDraft.content,
       "",
     ].join("\n");
   };
 
   const saveToDraftBox = async () => {
-    const slug = normalizeSlug(draft.draftId || draft.articleId || draft.slug || draft.title);
+    const targetDraft = draftRef.current;
+    const slug = normalizeSlug(targetDraft.draftId || targetDraft.articleId || targetDraft.slug || targetDraft.title);
     if (!slug) {
       notify("请先填写标题或有效的 slug");
       return;
     }
 
+    autosavePausedRef.current = true;
     setSavingDraft(true);
     try {
+      if (autosaveInFlightRef.current) await autosaveInFlightRef.current;
       const response = await fetch("/api/local-draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slug,
-          markdown: markdownForDraft(slug, { includeSourceArticle: true }),
-          overwrite: Boolean(draft.draftId),
+          markdown: markdownForDraft(targetDraft, slug, { includeSourceArticle: true }),
+          overwrite: Boolean(targetDraft.draftId),
         }),
       });
       const responseText = await response.text();
@@ -553,39 +728,51 @@ export default function Home() {
       if (!response.ok || !result.filename || !result.draft) {
         throw new Error(result.error || "草稿保存失败");
       }
-      setDraft(draftFromDraftArticle(result.draft));
+      loadDraftIntoEditor(draftFromDraftArticle(result.draft));
       await refreshDraftArticles();
-      notify(`已保存到草稿箱：${result.filename}`);
+      let cleanupWarning = "";
+      try {
+        await deleteRecoveryFile();
+      } catch (error) {
+        cleanupWarning = error instanceof Error ? error.message : "临时文件清理失败";
+      }
+      notify(cleanupWarning
+        ? `草稿已保存，但${cleanupWarning}`
+        : `已保存到草稿箱：${result.filename}`);
       window.location.assign(`#editor/draft/${encodeURIComponent(result.draft.id)}`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "草稿保存失败");
     } finally {
+      autosavePausedRef.current = false;
       setSavingDraft(false);
     }
   };
 
   const saveMarkdownToProject = async () => {
-    if (!draft.title.trim() || !draft.content.trim()) {
+    const targetDraft = draftRef.current;
+    if (!targetDraft.title.trim() || !targetDraft.content.trim()) {
       notify("正式发布前请写下标题和正文");
       return;
     }
 
-    const slug = normalizeSlug(draft.articleId || draft.slug || draft.draftId || draft.title);
+    const slug = normalizeSlug(targetDraft.articleId || targetDraft.slug || targetDraft.draftId || targetDraft.title);
     if (!slug) {
       notify("请填写有效的 slug");
       return;
     }
 
+    autosavePausedRef.current = true;
     setSavingMarkdown(true);
     try {
+      if (autosaveInFlightRef.current) await autosaveInFlightRef.current;
       const response = await fetch("/api/local-post", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slug,
-          markdown: markdownForDraft(slug),
-          overwrite: Boolean(draft.articleId),
-          sourceDraftSlug: draft.draftId,
+          markdown: markdownForDraft(targetDraft, slug),
+          overwrite: Boolean(targetDraft.articleId),
+          sourceDraftSlug: targetDraft.draftId,
         }),
       });
       const responseText = await response.text();
@@ -600,18 +787,170 @@ export default function Home() {
       }
       if (!response.ok || !result.filename || result.pushed !== true) {
         if (result.article) {
-          setDraft((current) => ({ ...current, articleId: result.article?.id || slug }));
+          const nextDraft = { ...draftRef.current, articleId: result.article.id || slug };
+          draftRef.current = nextDraft;
+          setDraft(nextDraft);
         }
         throw new Error(result.error || "Markdown 保存失败");
       }
       await Promise.all([refreshProjectArticles(), refreshDraftArticles()]);
-      setDraft({ ...emptyDraft });
-      notify(`已提交并推送 ${result.commit || "最新文章"}`);
+      let cleanupWarning = "";
+      try {
+        await deleteRecoveryFile();
+      } catch (error) {
+        cleanupWarning = error instanceof Error ? error.message : "临时文件清理失败";
+      }
+      loadDraftIntoEditor({ ...emptyDraft });
+      notify(cleanupWarning
+        ? `正文已提交并推送，但${cleanupWarning}`
+        : `已提交并推送 ${result.commit || "最新文章"}`);
       window.location.hash = `article/${encodeURIComponent(slug)}`;
     } catch (error) {
       notify(error instanceof Error ? error.message : "Markdown 保存失败");
     } finally {
+      autosavePausedRef.current = false;
       setSavingMarkdown(false);
+    }
+  };
+
+  const saveRecoveryAsDraft = async () => {
+    if (!recovery) return;
+    if (!window.confirm("确认把这份临时文件保存到草稿箱？保存成功后，临时文件会被删除。")) return;
+
+    const targetDraft = recovery.draft;
+    const slug = normalizeSlug(
+      targetDraft.draftId ||
+      targetDraft.articleId ||
+      targetDraft.slug ||
+      targetDraft.title,
+    ) || recoveryFallbackSlug(recovery.savedAt);
+    setRecoveryAction("draft");
+    setRecoveryError("");
+    autosavePausedRef.current = true;
+    let resolved = false;
+    try {
+      const response = await fetch("/api/local-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug,
+          markdown: markdownForDraft(targetDraft, slug, { includeSourceArticle: true }),
+          overwrite: Boolean(targetDraft.draftId),
+        }),
+      });
+      const result = await response.json() as DraftSaveResponse;
+      if (!response.ok || !result.filename || !result.draft) {
+        throw new Error(result.error || "临时文件保存到草稿箱失败");
+      }
+
+      const savedDraft = draftFromDraftArticle(result.draft);
+      setRecovery((current) => current ? { ...current, draft: savedDraft } : current);
+      await deleteRecoveryFile();
+      await refreshDraftArticles();
+      loadDraftIntoEditor(savedDraft);
+      setRecovery(null);
+      setRecoveryGateStatus("ready");
+      resolved = true;
+      notify(`临时文件已存入草稿箱：${result.filename}`);
+      window.location.assign(`#editor/draft/${encodeURIComponent(result.draft.id)}`);
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "临时文件保存到草稿箱失败");
+    } finally {
+      autosavePausedRef.current = !resolved;
+      setRecoveryAction(null);
+    }
+  };
+
+  const saveRecoveryAsPost = async () => {
+    if (!recovery) return;
+    const targetDraft = recovery.draft;
+    if (!targetDraft.title.trim() || !targetDraft.content.trim()) {
+      setRecoveryError("这份临时文件缺少标题或正文，暂时不能保存为正文；请先存入草稿箱。");
+      return;
+    }
+    if (!window.confirm("确认把这份临时文件保存为正文？这会执行构建、Git 提交并推送到 main。")) return;
+
+    const slug = normalizeSlug(
+      targetDraft.articleId ||
+      targetDraft.slug ||
+      targetDraft.draftId ||
+      targetDraft.title,
+    ) || recoveryFallbackSlug(recovery.savedAt);
+    setRecoveryAction("post");
+    setRecoveryError("");
+    autosavePausedRef.current = true;
+    try {
+      const response = await fetch("/api/local-post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug,
+          markdown: markdownForDraft(targetDraft, slug),
+          overwrite: Boolean(targetDraft.articleId),
+          sourceDraftSlug: targetDraft.draftId,
+        }),
+      });
+      const result = await response.json() as PostSaveResponse;
+      if (!response.ok || !result.filename || result.pushed !== true) {
+        if (response.status === 502 && result.article) {
+          const partiallyPublishedDraft = { ...targetDraft, articleId: result.article.id || slug };
+          const recoveryResponse = await fetch("/api/local-recovery", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ draft: partiallyPublishedDraft }),
+          });
+          const recoveryResult = await recoveryResponse.json() as RecoveryResponse;
+          if (recoveryResponse.ok && recoveryResult.recovery) setRecovery(recoveryResult.recovery);
+        }
+        throw new Error(result.error || "临时文件保存为正文失败");
+      }
+
+      await Promise.all([refreshProjectArticles(), refreshDraftArticles()]);
+      await deleteRecoveryFile();
+      loadDraftIntoEditor({ ...emptyDraft });
+      setRecovery(null);
+      setRecoveryGateStatus("ready");
+      notify(`临时文件已提交并推送 ${result.commit || "最新文章"}`);
+      window.location.hash = `article/${encodeURIComponent(slug)}`;
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "临时文件保存为正文失败");
+    } finally {
+      autosavePausedRef.current = true;
+      setRecoveryAction(null);
+    }
+  };
+
+  const discardRecovery = async () => {
+    if (!recovery) return;
+    if (!window.confirm("确认永久丢弃这份临时文件？此操作无法撤销。")) return;
+
+    setRecoveryAction("discard");
+    setRecoveryError("");
+    autosavePausedRef.current = true;
+    try {
+      const [postResult, draftResult] = await Promise.all([
+        refreshProjectArticles(),
+        refreshDraftArticles(),
+      ]);
+      const requestedView = routeFromHash();
+      let nextDraft = { ...emptyDraft };
+      if (requestedView.name === "editor" && requestedView.id) {
+        const article = postResult.articles?.find((candidate) => candidate.id === requestedView.id);
+        if (article) nextDraft = draftFromArticle(article);
+      } else if (requestedView.name === "editor" && requestedView.draftId) {
+        const savedDraft = draftResult.drafts?.find((candidate) => candidate.id === requestedView.draftId);
+        if (savedDraft) nextDraft = draftFromDraftArticle(savedDraft);
+      }
+      await deleteRecoveryFile();
+      loadDraftIntoEditor(nextDraft);
+      setRecovery(null);
+      setRecoveryGateStatus("ready");
+      notify("临时文件已丢弃");
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "临时文件丢弃失败");
+    } finally {
+      autosavePausedRef.current = false;
+      setRecoveryAction(null);
     }
   };
 
@@ -636,6 +975,81 @@ export default function Home() {
           )}
         </nav>
       </header>
+
+      {view.name === "editor" && editorEnabled && recoveryGateStatus !== "ready" && (
+        <div className="recovery-gate" role="presentation">
+          <section
+            className="recovery-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recovery-dialog-title"
+            aria-describedby="recovery-dialog-description"
+          >
+            <p className="section-kicker">EDITOR RECOVERY</p>
+            {(recoveryGateStatus === "idle" || recoveryGateStatus === "checking") && (
+              <>
+                <h1 id="recovery-dialog-title">正在检查临时文件</h1>
+                <p id="recovery-dialog-description">确认没有待处理的自动保存内容后，编辑器才会打开。</p>
+              </>
+            )}
+            {recoveryGateStatus === "error" && (
+              <>
+                <h1 id="recovery-dialog-title">暂时不能打开编辑器</h1>
+                <p id="recovery-dialog-description">为避免覆盖可能存在的临时文件，请先恢复本地保存服务。</p>
+                <p className="recovery-error" role="alert">{recoveryError}</p>
+                <div className="recovery-actions">
+                  <button className="primary-button" type="button" onClick={() => void checkRecoveryFile()}>重新检查</button>
+                </div>
+              </>
+            )}
+            {recoveryGateStatus === "needs-action" && recovery && (
+              <>
+                <h1 id="recovery-dialog-title">发现未处理的临时文件</h1>
+                <p id="recovery-dialog-description">
+                  这是 {formatRecoveryTime(recovery.savedAt)} 自动保存的内容。请明确决定它的去向，处理前编辑器不会覆盖它。
+                </p>
+                <div className="recovery-summary">
+                  <span>{recovery.draft.articleId ? "文章修改" : recovery.draft.draftId ? "草稿修改" : "新文章"}</span>
+                  <strong>{recovery.draft.title.trim() || "未命名内容"}</strong>
+                  <small>正文 {recovery.draft.content.length.toLocaleString("zh-CN")} 字符</small>
+                  <p>{recovery.draft.content.trim().slice(0, 260) || "正文尚未填写"}</p>
+                </div>
+                {recoveryError && <p className="recovery-error" role="alert">{recoveryError}</p>}
+                <div className="recovery-actions">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => void saveRecoveryAsDraft()}
+                    disabled={recoveryAction !== null}
+                  >
+                    {recoveryAction === "draft" ? "正在存入草稿箱…" : "存入草稿箱"}
+                  </button>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={() => void saveRecoveryAsPost()}
+                    disabled={recoveryAction !== null || !recovery.draft.title.trim() || !recovery.draft.content.trim()}
+                    title={!recovery.draft.title.trim() || !recovery.draft.content.trim() ? "需要完整的标题和正文" : undefined}
+                  >
+                    {recoveryAction === "post" ? "正在保存为正文…" : "保存为正文"}
+                  </button>
+                  <button
+                    className="recovery-discard"
+                    type="button"
+                    onClick={() => void discardRecovery()}
+                    disabled={recoveryAction !== null}
+                  >
+                    {recoveryAction === "discard" ? "正在丢弃…" : "丢弃临时文件"}
+                  </button>
+                </div>
+                {(!recovery.draft.title.trim() || !recovery.draft.content.trim()) && (
+                  <p className="recovery-note">临时内容不完整，只能先存入草稿箱或丢弃。</p>
+                )}
+              </>
+            )}
+          </section>
+        </div>
+      )}
 
       <main>
         {view.name === "home" && (
@@ -787,7 +1201,7 @@ export default function Home() {
           </section>
         )}
 
-        {view.name === "editor" && editorEnabled && (
+        {view.name === "editor" && editorEnabled && recoveryGateStatus === "ready" && (
           <section className="editor-page">
             <div className="editor-topbar">
               <div>
@@ -804,7 +1218,10 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <p className="editor-tip">草稿以 content/drafts 中的本地 Markdown 为准；正式保存会写入 content/posts，通过静态构建后提交并推送到 main。</p>
+            <p className={`editor-tip${autosaveFailed ? " autosave-failed" : ""}`}>
+              草稿以 content/drafts 中的本地 Markdown 为准；正式保存会写入 content/posts，通过静态构建后提交并推送到 main。
+              <span>{autosaveNotice}</span>
+            </p>
             <div className="editor-meta">
               <label className="title-field">
                 <span>标题</span>

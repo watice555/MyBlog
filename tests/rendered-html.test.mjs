@@ -273,13 +273,13 @@ test("supports editing and updating existing articles", async () => {
   ]);
 
   assert.match(page, /articleId\?: string/);
-  assert.match(page, /const editArticle = \(article: Article\)/);
+  assert.match(page, /const editArticle = async \(article: Article\)/);
   assert.match(page, /value\.startsWith\("editor\/"\)/);
   assert.match(page, /\{ name: "editor", id: decodeURIComponent\(value\.slice\(7\)\) \}/);
-  assert.match(page, /window\.location\.hash = `editor\/\$\{encodeURIComponent\(article\.id\)\}`/);
+  assert.match(page, /window\.location\.assign\(`#editor\/\$\{encodeURIComponent\(article\.id\)\}`\)/);
   assert.match(page, /const restoreEditorDraft = \(\) =>/);
   assert.match(page, /articles\.find\(\(candidate\) => candidate\.id === currentView\.id\)/);
-  assert.match(page, /current\.articleId === article\.id && !current\.draftId \? current : draftFromArticle\(article\)/);
+  assert.match(page, /draftRef\.current\.articleId !== article\.id \|\| draftRef\.current\.draftId/);
   assert.doesNotMatch(page, /localArticles|corner-posts|corner-draft|localStorage/);
   assert.match(page, /onEdit=\{editArticle\}/);
   assert.match(page, />编辑文章<\/button>/);
@@ -346,7 +346,7 @@ test("stores numeric AI participation levels and maps them to public labels", as
   assert.match(page, /AI_PARTICIPATION_LABELS\[value - 1\]/);
   assert.match(page, /type="range"/);
   assert.match(page, /aria-valuetext=\{label\}/);
-  assert.match(page, /`aiParticipation: \$\{draft\.aiParticipation\}`/);
+  assert.match(page, /`aiParticipation: \$\{targetDraft\.aiParticipation\}`/);
   assert.match(page, /function AiParticipationIndicator\(\{ value, variant \}: \{ value: AiParticipationLevel; variant: "dots" \| "label" \}\)/);
   assert.match(page, /AI_PARTICIPATION_LABELS\.map\(\(dotLabel, index\) =>/);
   assert.match(page, /active && variant === "label"/);
@@ -530,6 +530,76 @@ excerpt: ""
   assert.equal((await requestLocalPosts(middleware)).body.articles.length, 1);
 });
 
+test("atomically stores one editor recovery file until the user resolves it", async (testContext) => {
+  const { middleware, projectRoot } = await createLocalApiFixture(testContext);
+  const recoveryPath = resolve(
+    projectRoot,
+    "content",
+    "drafts",
+    ".recovery",
+    "editor-autosave.json",
+  );
+  const recoveryDraft = {
+    slug: "",
+    title: "还没来得及保存",
+    excerpt: "",
+    category: "评论",
+    aiParticipation: 2,
+    content: "这段正文必须能够恢复。",
+  };
+
+  const empty = await requestLocalJson(middleware, "/api/local-recovery");
+  assert.equal(empty.status, 200);
+  assert.equal(empty.body.recovery, null);
+
+  const saved = await requestLocalJson(middleware, "/api/local-recovery", {
+    method: "PUT",
+    input: { draft: recoveryDraft },
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.recovery.draft.title, recoveryDraft.title);
+  assert.ok(Date.parse(saved.body.recovery.savedAt));
+  assert.deepEqual(JSON.parse(await readFile(recoveryPath, "utf8")), saved.body.recovery);
+
+  const listedDrafts = await requestLocalJson(middleware, "/api/local-draft");
+  assert.equal(listedDrafts.body.count, 0);
+
+  const remoteWrite = await requestLocalJson(middleware, "/api/local-recovery", {
+    method: "PUT",
+    input: { draft: { ...recoveryDraft, content: "不应写入" } },
+    host: "blog.example.com",
+  });
+  assert.equal(remoteWrite.status, 403);
+  assert.equal(JSON.parse(await readFile(recoveryPath, "utf8")).draft.content, recoveryDraft.content);
+
+  const replaced = await requestLocalJson(middleware, "/api/local-recovery", {
+    method: "PUT",
+    input: { draft: { ...recoveryDraft, content: "十秒后的新内容。" } },
+  });
+  assert.equal(replaced.status, 200);
+  assert.equal((await requestLocalJson(middleware, "/api/local-recovery")).body.recovery.draft.content, "十秒后的新内容。");
+
+  const invalid = await requestLocalJson(middleware, "/api/local-recovery", {
+    method: "PUT",
+    input: { draft: { ...recoveryDraft, articleId: "Unsafe Slug" } },
+  });
+  assert.equal(invalid.status, 400);
+  assert.match(invalid.body.error, /articleId 无效/);
+  assert.equal(JSON.parse(await readFile(recoveryPath, "utf8")).draft.content, "十秒后的新内容。");
+
+  const wrongMethod = await requestLocalJson(middleware, "/api/local-recovery", {
+    method: "POST",
+    input: { draft: recoveryDraft },
+  });
+  assert.equal(wrongMethod.status, 405);
+
+  const deleted = await requestLocalJson(middleware, "/api/local-recovery", { method: "DELETE" });
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.body.deleted, true);
+  await assert.rejects(access(recoveryPath));
+  assert.equal((await requestLocalJson(middleware, "/api/local-recovery")).body.recovery, null);
+});
+
 test("publishes a draft and only removes it after a successful push", async (testContext) => {
   const publishCalls = [];
   const { middleware, projectRoot } = await createLocalApiFixture(testContext, {
@@ -626,9 +696,22 @@ test("exposes the local draft box and one-click publish workflow only in the edi
   assert.match(page, /content\/drafts 中的本地 Markdown/);
   assert.match(page, />草稿箱<\/a>/);
   assert.match(page, /正式保存并发布/);
-  assert.match(page, /sourceDraftSlug: draft\.draftId/);
+  assert.match(page, /sourceDraftSlug: targetDraft\.draftId/);
+  assert.match(page, /fetch\("\/api\/local-recovery"/);
+  assert.match(page, /window\.setInterval\(\(\) => writeRecoveryFile\(draftRef\.current\), 10_000\)/);
+  assert.match(page, /存入草稿箱/);
+  assert.match(page, /保存为正文/);
+  assert.match(page, /丢弃临时文件/);
+  assert.match(page, /确认把这份临时文件保存到草稿箱/);
+  assert.match(page, /确认把这份临时文件保存为正文/);
+  assert.match(page, /确认永久丢弃这份临时文件/);
+  assert.match(page, /recoveryGateStatus === "ready"/);
   assert.match(styles, /\.draft-card\s*\{/);
+  assert.match(styles, /\.recovery-gate\s*\{/);
   assert.match(localPostsPlugin, /const draftRoute = "\/api\/local-draft"/);
+  assert.match(localPostsPlugin, /const recoveryRoute = "\/api\/local-recovery"/);
+  assert.match(localPostsPlugin, /resolve\(draftsDirectory, "\.recovery"\)/);
+  assert.match(localPostsPlugin, /await atomicWrite\(recoveryDirectory, recoveryFilename/);
   assert.match(localPostsPlugin, /execFileAsync\("npm", \["run", "build:github"\]/);
   assert.match(localPostsPlugin, /execFileAsync\("git", \["push", "origin", "main"\]/);
   assert.match(localPostsPlugin, /assertNoOtherPostChanges/);

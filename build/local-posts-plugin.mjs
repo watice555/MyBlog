@@ -9,6 +9,7 @@ import matter from "gray-matter";
 const execFileAsync = promisify(execFile);
 const postRoute = "/api/local-post";
 const draftRoute = "/api/local-draft";
+const recoveryRoute = "/api/local-recovery";
 const imageRoute = "/api/local-image";
 const generateRoute = "/api/local-content-generate";
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
@@ -230,6 +231,69 @@ function parseDraft(markdown, filename, expectedSlug) {
   };
 }
 
+function normalizeRecoveryId(value, label) {
+  const rawValue = String(value ?? "").trim();
+  if (!rawValue) return undefined;
+  const normalized = normalizeSlug(rawValue);
+  if (!normalized || normalized !== rawValue) {
+    throw new Error(`临时文件中的 ${label} 无效`);
+  }
+  return normalized;
+}
+
+function normalizeRecoveryDraft(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("临时文件缺少编辑内容");
+  }
+
+  const articleId = normalizeRecoveryId(value.articleId, "articleId");
+  const draftId = normalizeRecoveryId(value.draftId, "draftId");
+  const rawSlug = String(value.slug ?? "").trim();
+  const slug = rawSlug ? normalizeRecoveryId(rawSlug, "slug") : "";
+  const originalDate = String(value.originalDate ?? "").trim();
+  if (originalDate && !/^\d{4}[.-]\d{2}[.-]\d{2}$/.test(originalDate)) {
+    throw new Error("临时文件中的日期无效");
+  }
+  const aiParticipation = Number(value.aiParticipation);
+  if (!Number.isInteger(aiParticipation) || aiParticipation < 1 || aiParticipation > 5) {
+    throw new Error("临时文件中的 aiParticipation 必须是 1 到 5 之间的整数");
+  }
+
+  return {
+    ...(articleId ? { articleId } : {}),
+    ...(draftId ? { draftId } : {}),
+    ...(originalDate ? { originalDate } : {}),
+    slug,
+    title: String(value.title ?? ""),
+    excerpt: String(value.excerpt ?? ""),
+    category: String(value.category ?? "评论"),
+    aiParticipation,
+    content: String(value.content ?? ""),
+  };
+}
+
+async function readRecoverySnapshot(recoveryPath) {
+  let source;
+  try {
+    source = await readFile(recoveryPath, "utf8");
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") return null;
+    throw error;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(source);
+  } catch {
+    throw new Error("编辑器临时文件已损坏，请先手动备份或修复");
+  }
+  const savedAt = String(payload.savedAt ?? "");
+  if (!savedAt || Number.isNaN(Date.parse(savedAt))) {
+    throw new Error("编辑器临时文件缺少有效的保存时间");
+  }
+  return { draft: normalizeRecoveryDraft(payload.draft), savedAt };
+}
+
 async function findMarkdown(directory, slug, parser) {
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries) {
@@ -366,6 +430,9 @@ async function publishPostToGit({ projectRoot, filename, markdown, title, isUpda
 export default function createLocalPostsPlugin(projectRoot = process.cwd(), options = {}) {
   const postsDirectory = resolve(projectRoot, "content", "posts");
   const draftsDirectory = resolve(projectRoot, "content", "drafts");
+  const recoveryDirectory = resolve(draftsDirectory, ".recovery");
+  const recoveryFilename = "editor-autosave.json";
+  const recoveryPath = resolve(recoveryDirectory, recoveryFilename);
   const publicDirectory = resolve(projectRoot, "public");
   const generatedPath = resolve(projectRoot, "app", "generated-posts.ts");
   const generatorPath = resolve(projectRoot, "scripts", "generate-posts.mjs");
@@ -402,7 +469,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
         const pathname = new URL(request.url || "/", "http://localhost").pathname;
-        if (![postRoute, draftRoute, imageRoute, generateRoute].includes(pathname)) return next();
+        if (![postRoute, draftRoute, recoveryRoute, imageRoute, generateRoute].includes(pathname)) return next();
         if (!isAllowedHost(request.headers.host)) {
           sendJson(response, 403, { error: "只允许通过本机回环地址使用博客编辑器" });
           return;
@@ -435,6 +502,44 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
             sendJson(response, 200, await saveImage(request, publicDirectory));
           } catch (error) {
             sendJson(response, 400, { error: formatError(error, "图片保存失败") });
+          }
+          return;
+        }
+
+        if (pathname === recoveryRoute) {
+          if (request.method === "GET") {
+            try {
+              sendJson(response, 200, { recovery: await readRecoverySnapshot(recoveryPath) });
+            } catch (error) {
+              sendJson(response, 500, { error: formatError(error, "编辑器临时文件读取失败") });
+            }
+            return;
+          }
+          if (request.method === "DELETE") {
+            try {
+              await unlink(recoveryPath).catch((error) => {
+                if (!error || typeof error !== "object" || error.code !== "ENOENT") throw error;
+              });
+              sendJson(response, 200, { deleted: true });
+            } catch (error) {
+              sendJson(response, 500, { error: formatError(error, "编辑器临时文件删除失败") });
+            }
+            return;
+          }
+          if (request.method !== "PUT") {
+            sendJson(response, 405, { error: "只支持 GET、PUT 和 DELETE 请求" });
+            return;
+          }
+          try {
+            const input = await readJsonBody(request);
+            const recovery = {
+              draft: normalizeRecoveryDraft(input.draft),
+              savedAt: new Date().toISOString(),
+            };
+            await atomicWrite(recoveryDirectory, recoveryFilename, `${JSON.stringify(recovery, null, 2)}\n`);
+            sendJson(response, 200, { recovery });
+          } catch (error) {
+            sendJson(response, 400, { error: formatError(error, "编辑器临时文件保存失败") });
           }
           return;
         }
