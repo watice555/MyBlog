@@ -176,8 +176,16 @@ function normalizeSlug(value: string) {
     .replace(/^-|-$/g, "");
 }
 
+function wordCount(text: string) {
+  return text.replace(/\s/g, "").length;
+}
+
+function formatWordCount(text: string) {
+  return `${wordCount(text).toLocaleString("zh-CN")} 字`;
+}
+
 function readTime(text: string) {
-  return `${Math.max(1, Math.ceil(text.replace(/\s/g, "").length / 400))} 分钟`;
+  return `${Math.max(1, Math.ceil(wordCount(text) / 400))} 分钟`;
 }
 
 function escapeLiteralDollarSigns(source: string) {
@@ -1187,7 +1195,7 @@ export default function Home() {
                   <div>
                     <p>{savedDraft.sourceArticleId ? "正式文章的修改草稿" : "未发布草稿"} · {savedDraft.date}</p>
                     <h2>{savedDraft.title || "未命名草稿"}</h2>
-                    <span>{savedDraft.category} · {savedDraft.readTime}</span>
+                    <span>{savedDraft.category} · {formatWordCount(savedDraft.content)} · {savedDraft.readTime}</span>
                   </div>
                   <button type="button" onClick={() => editSavedDraft(savedDraft)}>打开编辑</button>
                 </article>
@@ -1334,7 +1342,7 @@ export default function Home() {
                   <p className="article-category">{draft.category || "未分类"}</p>
                   <h1>{draft.title || "未命名的文章"}</h1>
                   <div className="article-meta">
-                    <span>{draft.originalDate || formatDate(new Date())} · {readTime(draft.content)}</span>
+                    <span>{draft.originalDate || formatDate(new Date())} · {formatWordCount(draft.content)} · {readTime(draft.content)}</span>
                     <AiParticipationIndicator value={draft.aiParticipation} variant="label" />
                   </div>
                   <Markdown source={draft.content} />
@@ -1383,7 +1391,7 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         {article.excerpt && <p>{article.excerpt}</p>}
       </div>
       <div className="article-tail">
-        <span>{article.readTime}</span>
+        <span>{formatWordCount(article.content)} · {article.readTime}</span>
         <a href={`#article/${encodeURIComponent(article.id)}`} aria-label={`阅读《${article.title}》`}>↗</a>
       </div>
     </article>
@@ -1484,7 +1492,7 @@ function ArticlePage({ article, onEdit, canEdit }: { article?: Article; onEdit: 
         <h1>{article.title}</h1>
         {article.excerpt && <p className="reading-deck">{article.excerpt}</p>}
         <div className="article-meta">
-          <span>{article.date} · {article.readTime}</span>
+          <span>{article.date} · {formatWordCount(article.content)} · {article.readTime}</span>
           <AiParticipationIndicator value={article.aiParticipation} variant="label" />
         </div>
       </header>

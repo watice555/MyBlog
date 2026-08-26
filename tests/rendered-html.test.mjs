@@ -190,6 +190,7 @@ test("server-renders the finished blog", async () => {
   assert.match(html, /watice’s blog/);
   assert.doesNotMatch(html, /一隅|CORNER NOTES|PERSONAL WRITING/);
   assert.match(html, /最近文章/);
+  assert.match(html.replaceAll("<!-- -->", ""), /\d[\d,]* 字 · \d+ 分钟/);
   assert.doesNotMatch(html, /RECENT COMMENTARY|ALL COMMENTARY|最近评论/);
   assert.match(html, /金融、科技/);
   assert.doesNotMatch(html, /写文章|编辑文章|同步文章|href="#editor"/);

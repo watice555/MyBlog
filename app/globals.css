@@ -335,7 +335,7 @@ textarea:focus-visible {
 
 .article-row {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 82px;
+  grid-template-columns: 72px minmax(0, 1fr) 150px;
   gap: 22px;
   align-items: start;
   padding: 38px 0;
@@ -432,6 +432,10 @@ textarea:focus-visible {
   justify-content: space-between;
   color: var(--muted);
   font-size: 11px;
+}
+
+.article-tail > span {
+  white-space: nowrap;
 }
 
 .article-tail a {
@@ -616,7 +620,7 @@ textarea:focus-visible {
 }
 
 .archive-list .article-row {
-  grid-template-columns: 72px minmax(0, 1fr) 90px;
+  grid-template-columns: 72px minmax(0, 1fr) 150px;
 }
 
 .about-grid {
