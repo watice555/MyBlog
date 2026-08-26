@@ -255,6 +255,8 @@ test("renders GFM tables and mathematical formulas with responsive styles", asyn
   assert.match(styles, /\.prose li::marker\s*\{/);
   assert.match(styles, /\.prose \.table-scroll\s*\{/);
   assert.match(styles, /\.prose \.katex-display\s*\{/);
+  assert.match(styles, /@media \(min-width:\s*901px\)\s*\{[\s\S]*?\.editor-workspace\s*\{[\s\S]*?height:\s*clamp\(680px, 78vh, 900px\)/);
+  assert.match(styles, /\.writing-pane textarea\s*\{[\s\S]*?overflow-y:\s*auto;[\s\S]*?resize:\s*none/);
   assert.match(styles, /\.article-body > p\s*\{[\s\S]*?width:\s*100%/);
   assert.doesNotMatch(styles, /\.article-body > p\s*\{[\s\S]*?max-width:\s*700px/);
   assert.match(styles, /--serif:\s*"Source Serif 4 Variable", "Songti SC", "STSong"/);

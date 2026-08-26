@@ -1513,6 +1513,28 @@ textarea:focus-visible {
   font-size: 16px;
 }
 
+@media (min-width: 901px) {
+  .editor-workspace {
+    height: clamp(680px, 78vh, 900px);
+    min-height: 0;
+  }
+
+  .writing-pane,
+  .preview-pane {
+    min-height: 0;
+  }
+
+  .writing-pane {
+    overflow: hidden;
+  }
+
+  .writing-pane textarea {
+    min-height: 0;
+    overflow-y: auto;
+    resize: none;
+  }
+}
+
 .site-footer {
   width: min(1180px, calc(100% - 64px));
   min-height: 230px;
