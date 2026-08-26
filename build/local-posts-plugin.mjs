@@ -358,8 +358,8 @@ function referencedPostImages(markdown, projectRoot) {
 
 async function assertNoOtherPostChanges(projectRoot, intendedPostPath) {
   const [{ stdout: tracked = "" }, { stdout: untracked = "" }] = await Promise.all([
-    execFileAsync("git", ["diff", "--name-only", "HEAD", "--", "content/posts"], { cwd: projectRoot }),
-    execFileAsync("git", ["ls-files", "--others", "--exclude-standard", "--", "content/posts"], { cwd: projectRoot }),
+    execFileAsync("git", ["-c", "core.quotePath=false", "diff", "--name-only", "HEAD", "--", "content/posts"], { cwd: projectRoot }),
+    execFileAsync("git", ["-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard", "--", "content/posts"], { cwd: projectRoot }),
   ]);
   const otherPaths = [...new Set(`${tracked}\n${untracked}`.split(/\r?\n/).filter(Boolean))]
     .filter((path) => path !== intendedPostPath);
@@ -381,6 +381,7 @@ async function publishPostToGit({ projectRoot, filename, markdown, title, isUpda
   try {
     await execFileAsync("npm", ["run", "build:github"], {
       cwd: projectRoot,
+      env: { ...process.env, NODE_ENV: "production" },
       maxBuffer: 12 * 1024 * 1024,
       timeout: 5 * 60 * 1000,
     });

@@ -716,8 +716,10 @@ test("exposes the local draft box and one-click publish workflow only in the edi
   assert.match(localPostsPlugin, /resolve\(draftsDirectory, "\.recovery"\)/);
   assert.match(localPostsPlugin, /await atomicWrite\(recoveryDirectory, recoveryFilename/);
   assert.match(localPostsPlugin, /execFileAsync\("npm", \["run", "build:github"\]/);
+  assert.match(localPostsPlugin, /env: \{ \.\.\.process\.env, NODE_ENV: "production" \}/);
   assert.match(localPostsPlugin, /execFileAsync\("git", \["push", "origin", "main"\]/);
   assert.match(localPostsPlugin, /assertNoOtherPostChanges/);
+  assert.match(localPostsPlugin, /core\.quotePath=false/);
   assert.match(gitignore, /^\/content\/drafts\/$/m);
 });
 
