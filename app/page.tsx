@@ -97,6 +97,34 @@ type View =
 
 const repositoryArticles: Article[] = generatedPosts.map((article) => ({ ...article }));
 
+const EXTERNAL_PROJECTS = [
+  {
+    name: "循环提醒",
+    description: "离线优先的循环任务 PWA",
+    href: "https://watice555.github.io/reminder/",
+  },
+  {
+    name: "城市传染病指数",
+    description: "56 城疾病搜索指数历史",
+    href: "https://watice555.github.io/meituan-infection-index/",
+  },
+  {
+    name: "LOF iNAV",
+    description: "跨市场 LOF 日内估值实验台",
+    href: "https://github.com/watice555/lof-inav",
+  },
+  {
+    name: "Gacha Links",
+    description: "抽卡二游资料与工具导航",
+    href: "https://watice555.github.io/gachalinks/",
+  },
+  {
+    name: "异环手账",
+    description: "《异环》轻量资料站",
+    href: "https://watice555.github.io/nte-notes/",
+  },
+] as const;
+
 const emptyDraft: Draft = {
   slug: "",
   title: "",
@@ -1166,9 +1194,43 @@ export default function Home() {
                 <p>你好，我是 watice。这里主要写金融、科技，以及它们与商业、社会和个人选择的交汇。</p>
                 <p>“凝”是停下来凝视与沉淀，“泠”是清澈而冷静。这个名字提醒我：面对快速变化的市场与技术，先看清事实，再形成判断。</p>
                 <p>文章以评论为主，不追求仓促的结论，更在意论据、结构和长期变化。观点会更新，但对事实与逻辑的要求不会降低。</p>
-                <blockquote>对信息保持敏感，对叙事保持距离，对判断保持诚实。</blockquote>
+                <p className="about-credo"><em>对信息保持敏感，对叙事保持距离，对判断保持诚实。</em></p>
                 <p className="contact-line">关注主题 · 金融 / 科技 / 商业 / 社会</p>
               </div>
+              <aside className="project-index" aria-labelledby="project-index-title">
+                <p className="section-kicker">MY PROJECTS</p>
+                <h2 id="project-index-title">我的项目</h2>
+                <div className="project-list">
+                  {EXTERNAL_PROJECTS.map((project, index) => (
+                    <a
+                      href={project.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${project.name}（在新标签页打开）`}
+                      key={project.href}
+                    >
+                      <span className="project-number" aria-hidden="true">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span className="project-copy">
+                        <strong>{project.name}</strong>
+                        <small>{project.description}</small>
+                      </span>
+                      <span className="project-arrow" aria-hidden="true">↗</span>
+                    </a>
+                  ))}
+                </div>
+                <a
+                  className="github-entry"
+                  href="https://github.com/watice555"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="GitHub · watice555（在新标签页打开）"
+                >
+                  <span>GitHub · watice555</span>
+                  <span>查看全部项目 <span aria-hidden="true">↗</span></span>
+                </a>
+              </aside>
             </div>
           </section>
         )}

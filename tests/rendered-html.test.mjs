@@ -369,16 +369,43 @@ test("stores numeric AI participation levels and maps them to public labels", as
   assert.match(localPostsPlugin, /const aiParticipation = data\.aiParticipation/);
 });
 
-test("keeps the about page focused on the written introduction", async () => {
+test("shows the project index beside the about introduction", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /title="关于凝泠"/);
-  assert.doesNotMatch(page, /about-number|>01<\/div>/);
-  assert.match(styles, /\.about-grid\s*\{[\s\S]*?max-width:\s*630px/);
-  assert.doesNotMatch(styles, /\.about-number\s*\{/);
+  assert.match(page, /<p className="about-credo"><em>对信息保持敏感，对叙事保持距离，对判断保持诚实。<\/em><\/p>/);
+  assert.doesNotMatch(page, /<blockquote>对信息保持敏感/);
+  assert.match(page, /<p className="section-kicker">MY PROJECTS<\/p>/);
+  assert.match(page, /<h2 id="project-index-title">我的项目<\/h2>/);
+
+  const projectNames = ["循环提醒", "城市传染病指数", "LOF iNAV", "Gacha Links", "异环手账"];
+  const projectUrls = [
+    "https://watice555.github.io/reminder/",
+    "https://watice555.github.io/meituan-infection-index/",
+    "https://github.com/watice555/lof-inav",
+    "https://watice555.github.io/gachalinks/",
+    "https://watice555.github.io/nte-notes/",
+  ];
+
+  let previousProjectIndex = -1;
+  for (const projectName of projectNames) {
+    const projectIndex = page.indexOf(`name: "${projectName}"`);
+    assert.ok(projectIndex > previousProjectIndex, `${projectName} 应按计划排序`);
+    previousProjectIndex = projectIndex;
+  }
+  for (const projectUrl of projectUrls) assert.ok(page.includes(`href: "${projectUrl}"`));
+
+  assert.match(page, /href="https:\/\/github\.com\/watice555"/);
+  assert.match(page, /target="_blank"/);
+  assert.match(page, /rel="noopener noreferrer"/);
+  assert.match(page, /在新标签页打开/);
+  assert.match(styles, /\.about-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1\.18fr\) minmax\(370px, 0\.82fr\)/);
+  assert.match(styles, /\.about-copy,[\s\S]*?\.project-index\s*\{[\s\S]*?border-top:\s*1px solid var\(--ink\)/);
+  assert.match(styles, /\.project-list > a\s*\{[\s\S]*?padding:\s*15px 0/);
+  assert.match(styles, /@media \(max-width:\s*680px\)\s*\{[\s\S]*?\.about-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
 });
 
 test("generates the article list from Markdown Front Matter", async () => {
