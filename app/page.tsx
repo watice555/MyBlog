@@ -1069,11 +1069,6 @@ export default function Home() {
                 <p className="hero-intro">这里写金融、科技，以及它们如何改变商业与生活。<br />记录事实，拆解叙事，也保留可被修正的判断。</p>
                 <a className="primary-link" href="#archive">开始阅读 <span aria-hidden="true">→</span></a>
               </div>
-              <aside className="today-note" aria-label="凝泠札记">
-                <span className="note-index">N° 01</span>
-                <p>“观点可以鲜明，<br />判断必须克制。”</p>
-                <span className="note-date">凝泠札记 · 长期观察</span>
-              </aside>
             </section>
 
             <section className="latest" aria-labelledby="latest-title">
