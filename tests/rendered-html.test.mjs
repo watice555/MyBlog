@@ -1,9 +1,13 @@
+import { execFile } from "node:child_process";
 import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
+import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 import matter from "gray-matter";
 import createLocalLlmPlugin from "../build/local-llm-plugin.mjs";
 import createLocalPostsPlugin from "../build/local-posts-plugin.mjs";
@@ -98,7 +102,7 @@ async function requestLocalPosts(middleware, { host = "localhost:3000", origin =
 async function requestLocalJson(
   middleware,
   url,
-  { method = "GET", input, host = "localhost:3000", origin = "http://localhost:3000" } = {},
+  { method = "GET", input, host = "localhost:3000", origin = "http://localhost:3000", contentType = "application/json" } = {},
 ) {
   let body = "";
   const response = {
@@ -112,7 +116,7 @@ async function requestLocalJson(
     ? Readable.from([])
     : Readable.from([Buffer.from(JSON.stringify(input))]);
   Object.assign(request, {
-    headers: { host, origin, ...(input === undefined ? {} : { "content-type": "application/json" }) },
+    headers: { host, origin, ...(input === undefined || contentType === null ? {} : { "content-type": contentType }) },
     method,
     url,
   });
@@ -159,7 +163,11 @@ async function createLocalLlmFixture(testContext) {
   return { middleware, upstreamRequests };
 }
 
-async function requestLocalAi(middleware, input, { host = "localhost:3000", origin = "http://localhost:3000" } = {}) {
+async function requestLocalAi(
+  middleware,
+  input,
+  { host = "localhost:3000", origin = "http://localhost:3000", contentType = "application/json" } = {},
+) {
   let body = "";
   const response = {
     statusCode: 200,
@@ -170,9 +178,37 @@ async function requestLocalAi(middleware, input, { host = "localhost:3000", orig
   };
   const request = Readable.from([Buffer.from(JSON.stringify(input))]);
   Object.assign(request, {
-    headers: { host, origin },
+    headers: { host, origin, ...(contentType === null ? {} : { "content-type": contentType }) },
     method: "POST",
     url: "/api/local-summary",
+  });
+  await middleware(request, response, () => {});
+  return { body: JSON.parse(body), status: response.statusCode };
+}
+
+async function requestLocalImage(
+  middleware,
+  buffer,
+  { host = "localhost:3000", origin = "http://localhost:3000", fileName = "photo.png", contentType = "image/png" } = {},
+) {
+  let body = "";
+  const response = {
+    statusCode: 200,
+    setHeader() {},
+    end(chunk = "") {
+      body += chunk;
+    },
+  };
+  const request = Readable.from([buffer]);
+  Object.assign(request, {
+    headers: {
+      host,
+      origin,
+      "content-type": contentType,
+      ...(fileName === null ? {} : { "x-file-name": fileName }),
+    },
+    method: "POST",
+    url: "/api/local-image",
   });
   await middleware(request, response, () => {});
   return { body: JSON.parse(body), status: response.statusCode };
@@ -490,6 +526,110 @@ test("regenerates content only through the loopback editor API", async (testCont
   assert.equal(success.body.count, 1);
   assert.equal(success.body.articles[0].id, "fixture");
   assert.equal(await readFile(marker, "utf8"), "1");
+});
+
+test("rejects dangerous front matter, cross-port origins, and non-JSON writes on local APIs", async (testContext) => {
+  let publishCalls = 0;
+  const { middleware, projectRoot } = await createLocalApiFixture(testContext, {
+    publishPost: async () => {
+      publishCalls += 1;
+      return { commit: "unused", pushed: true };
+    },
+  });
+  const safeMarkdown = `---
+slug: "safe-note"
+title: "正常草稿"
+date: "2026-08-12"
+category: "评论"
+aiParticipation: 1
+excerpt: ""
+---
+
+正常正文。
+`;
+  // If gray-matter ever evaluates this block, the canary file appears.
+  const canaryPath = resolve(projectRoot, "pwned.txt");
+  const jsMarkdown = `---js\n({ title: require("fs").writeFileSync(${JSON.stringify(canaryPath)}, "1") })\n---\n\n危险正文。\n`;
+
+  const jsDraft = await requestLocalJson(middleware, "/api/local-draft", {
+    method: "POST",
+    input: { slug: "evil-note", markdown: jsMarkdown, overwrite: false },
+  });
+  assert.equal(jsDraft.status, 400);
+  assert.match(jsDraft.body.error, /Front Matter/);
+  await assert.rejects(access(resolve(projectRoot, "content", "drafts", "evil-note.md")));
+
+  const jsPost = await requestLocalJson(middleware, "/api/local-post", {
+    method: "POST",
+    input: { slug: "evil-note", markdown: jsMarkdown, overwrite: false },
+  });
+  assert.equal(jsPost.status, 400);
+  assert.equal(publishCalls, 0);
+  await assert.rejects(access(resolve(projectRoot, "content", "posts", "evil-note.md")));
+  await assert.rejects(access(canaryPath));
+
+  const crossPort = await requestLocalJson(middleware, "/api/local-draft", {
+    method: "POST",
+    input: { slug: "safe-note", markdown: safeMarkdown, overwrite: false },
+    origin: "http://localhost:9999",
+  });
+  assert.equal(crossPort.status, 403);
+
+  const plainTextDraft = await requestLocalJson(middleware, "/api/local-draft", {
+    method: "POST",
+    input: { slug: "safe-note", markdown: safeMarkdown, overwrite: false },
+    contentType: "text/plain",
+  });
+  assert.equal(plainTextDraft.status, 400);
+  assert.match(plainTextDraft.body.error, /application\/json/);
+  await assert.rejects(access(resolve(projectRoot, "content", "drafts", "safe-note.md")));
+
+  const savedDraft = await requestLocalJson(middleware, "/api/local-draft", {
+    method: "POST",
+    input: { slug: "safe-note", markdown: safeMarkdown, overwrite: false },
+  });
+  assert.equal(savedDraft.status, 200);
+  assert.equal(savedDraft.body.draft.title, "正常草稿");
+});
+
+test("fails content generation when a post uses a non-YAML front matter delimiter", async (testContext) => {
+  const projectRoot = await mkdtemp(resolve(tmpdir(), "watice-generator-"));
+  testContext.after(() => rm(projectRoot, { recursive: true, force: true }));
+  const postsDirectory = resolve(projectRoot, "content", "posts");
+  const scriptsDirectory = resolve(projectRoot, "scripts");
+  await mkdir(postsDirectory, { recursive: true });
+  await mkdir(scriptsDirectory, { recursive: true });
+  // If gray-matter ever evaluates this block, the canary file appears.
+  const canaryPath = resolve(projectRoot, "pwned.txt");
+  await writeFile(
+    resolve(postsDirectory, "evil.md"),
+    `---js\n({ title: require("fs").writeFileSync(${JSON.stringify(canaryPath)}, "1") })\n---\n\n正文。\n`,
+    "utf8",
+  );
+  // The copy runs from a temp directory, so point its gray-matter import at the
+  // repository's installed copy.
+  const nodeRequire = createRequire(import.meta.url);
+  const generatorSource = await readFile(new URL("../scripts/generate-posts.mjs", import.meta.url), "utf8");
+  await writeFile(
+    resolve(scriptsDirectory, "generate-posts.mjs"),
+    generatorSource.replace(
+      'import matter from "gray-matter";',
+      `import matter from ${JSON.stringify(pathToFileURL(nodeRequire.resolve("gray-matter")).href)};`,
+    ),
+    "utf8",
+  );
+
+  const execFileAsync = promisify(execFile);
+  await assert.rejects(
+    execFileAsync(process.execPath, [resolve(scriptsDirectory, "generate-posts.mjs")]),
+    (error) => {
+      assert.match(String(error.stderr || ""), /evil\.md/);
+      assert.match(String(error.stderr || ""), /Front Matter/);
+      return true;
+    },
+  );
+  await assert.rejects(access(canaryPath));
+  await assert.rejects(access(resolve(projectRoot, "app", "generated-posts.ts")));
 });
 
 test("keeps local article reads and generated content synchronized with Markdown files", async (testContext) => {
@@ -811,6 +951,23 @@ test("keeps local AI writing tools author-oriented and suggestion-only", async (
   assert.equal(invalidTask.status, 400);
   assert.equal(upstreamRequests.length, 2);
 
+  const plainText = await requestLocalAi(middleware, {
+    task: "summary",
+    title: "写作工具",
+    content: "正文内容。",
+  }, { contentType: "text/plain" });
+  assert.equal(plainText.status, 400);
+  assert.match(plainText.body.error, /application\/json/);
+  assert.equal(upstreamRequests.length, 2);
+
+  const crossPort = await requestLocalAi(middleware, {
+    task: "summary",
+    title: "写作工具",
+    content: "正文内容。",
+  }, { origin: "http://localhost:9999" });
+  assert.equal(crossPort.status, 403);
+  assert.equal(upstreamRequests.length, 2);
+
   const remoteHost = await requestLocalAi(middleware, {
     task: "proofread",
     content: "正文内容。",
@@ -840,4 +997,30 @@ test("uploads article images into the public post asset directory", async () => 
   assert.match(localPostsPlugin, /图片不能超过 12 MB/);
   assert.match(localPostsPlugin, /path: `images\/posts\/\$\{year\}\/\$\{month\}\//);
   assert.match(readme, /public\/images\/posts\/年\/月\//);
+});
+
+test("saves local article images only with an explicit filename header and valid magic bytes", async (testContext) => {
+  const { middleware, projectRoot } = await createLocalApiFixture(testContext);
+  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+  const publicImagesDirectory = resolve(projectRoot, "public", "images", "posts");
+
+  const missingHeader = await requestLocalImage(middleware, pngBytes, { fileName: null });
+  assert.equal(missingHeader.status, 400);
+  assert.match(missingHeader.body.error, /文件名/);
+  const existingEntries = await readdir(publicImagesDirectory, { recursive: true }).catch(() => []);
+  assert.equal(existingEntries.length, 0);
+
+  const crossPort = await requestLocalImage(middleware, pngBytes, { origin: "http://localhost:9999" });
+  assert.equal(crossPort.status, 403);
+
+  const saved = await requestLocalImage(middleware, pngBytes, { fileName: encodeURIComponent("插图.png") });
+  assert.equal(saved.status, 200);
+  assert.match(saved.body.path, /^images\/posts\/\d{4}\/\d{2}\/[^/]+\.png$/);
+  await access(resolve(projectRoot, "public", saved.body.path));
+
+  const rejectedBytes = await requestLocalImage(middleware, Buffer.from("not an image", "utf8"), {
+    fileName: "fake.png",
+  });
+  assert.equal(rejectedBytes.status, 400);
+  assert.match(rejectedBytes.body.error, /只支持/);
 });
