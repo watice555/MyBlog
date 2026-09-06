@@ -1,5 +1,12 @@
 # 实施记录
 
+## 2026-09-07 01:33 Asia/Shanghai — 完善 CI 与部署验证
+
+- 阶段总结：新增 PR CI，执行依赖安装、lint、测试和静态导出；部署前增加 lint 与测试，并设置构建和部署超时；将 build/ 插件源码纳入 ESLint；忽略本地 .zcode/ 目录。本次配置更改在 main 上验证并提交，未包含 ci/validate 分支已有的独立安全修复提交。
+- 已执行的验证：`npm run lint`；`npm test`（main 上 18 项全部通过）；设置 GitHub Actions 与仓库环境变量后的 `npm run build:github`（验证 /MyBlog 子路径）；`git diff --check`；`git check-ignore` 确认 .zcode/ 已忽略。此前通过 ESLint API 确认三个 build/ 插件未被忽略。验证环境为本地 Node 24，未在本地复现 Ubuntu / Node 22；构建仅有大体积 chunk 提示。
+- 写入者模型：GPT-6
+- 设备：TianhaodeMacBook-Pro（macOS 26.6.2，arm64）
+
 ## 2026-08-30 14:26 Asia/Shanghai — 精简首页 Hero 区域
 
 - 阶段总结：删除首页右侧“观点可以鲜明，判断必须克制。”及“凝泠札记 · 长期观察”卡片，将 Hero 调整为更紧凑的单栏布局，并收紧桌面端与移动端的纵向留白；补充公开渲染回归断言，确保已删除文案不会再次出现。
