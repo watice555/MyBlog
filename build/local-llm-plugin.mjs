@@ -11,10 +11,14 @@ function sendJson(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
-function isAllowedOrigin(origin) {
+function isAllowedOrigin(origin, host) {
+  // A same-origin request carries an Origin that matches the Host header exactly
+  // (hostname and port). Comparing only the hostname would let any page served
+  // from another local port pose as the loopback editor.
   if (!origin) return true;
   try {
-    return loopbackHosts.has(new URL(origin).hostname);
+    const originUrl = new URL(origin);
+    return originUrl.protocol === "http:" && originUrl.host === new URL(`http://${host}`).host;
   } catch {
     return false;
   }
@@ -37,7 +41,11 @@ async function readJsonBody(request) {
     if (size > 1024 * 1024) throw new Error("文章内容过长，无法调用文字助手");
     chunks.push(chunk);
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new Error("请求内容不是有效的 JSON");
+  }
 }
 
 async function loadSettings(configPath) {
@@ -186,12 +194,19 @@ export default function createLocalLlmPlugin(
           sendJson(response, 403, { error: "只允许通过本机回环地址调用文字助手" });
           return;
         }
-        if (!isAllowedOrigin(request.headers.origin)) {
+        if (!isAllowedOrigin(request.headers.origin, request.headers.host)) {
           sendJson(response, 403, { error: "只允许从本机博客编辑器调用模型" });
           return;
         }
         if (request.method !== "POST") {
           sendJson(response, 405, { error: "只支持 POST 请求" });
+          return;
+        }
+        // Requiring application/json forces browsers through a CORS preflight
+        // before a cross-origin write can reach this endpoint.
+        const contentType = String(request.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+        if (contentType !== "application/json") {
+          sendJson(response, 400, { error: "请求必须使用 application/json 格式" });
           return;
         }
 

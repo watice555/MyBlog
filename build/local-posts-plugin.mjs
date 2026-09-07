@@ -22,10 +22,14 @@ function sendJson(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
-function isAllowedOrigin(origin) {
+function isAllowedOrigin(origin, host) {
+  // A same-origin request carries an Origin that matches the Host header exactly
+  // (hostname and port). Comparing only the hostname would let any page served
+  // from another local port pose as the loopback editor.
   if (!origin) return true;
   try {
-    return loopbackHosts.has(new URL(origin).hostname);
+    const originUrl = new URL(origin);
+    return originUrl.protocol === "http:" && originUrl.host === new URL(`http://${host}`).host;
   } catch {
     return false;
   }
@@ -59,6 +63,12 @@ function formatError(error, fallback) {
 }
 
 async function readJsonBody(request) {
+  // Requiring application/json forces browsers through a CORS preflight before
+  // a cross-origin write can reach these endpoints.
+  const contentType = String(request.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+  if (contentType !== "application/json") {
+    throw new Error("请求必须使用 application/json 格式");
+  }
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
@@ -130,6 +140,9 @@ function safeImageStem(filename) {
 }
 
 async function saveImage(request, publicDirectory) {
+  // The custom header forces browsers through a CORS preflight, so a plain
+  // cross-origin form post cannot reach the filesystem write.
+  if (!request.headers["x-file-name"]) throw new Error("缺少图片文件名请求头");
   const body = await readImageBody(request);
   const type = detectImageType(body);
   const stem = safeImageStem(request.headers["x-file-name"]);
@@ -174,8 +187,21 @@ function articleReadTime(body) {
   return `${Math.max(1, Math.ceil(body.replace(/\s/g, "").length / 400))} 分钟`;
 }
 
+function parseFrontMatter(markdown, filename) {
+  // gray-matter routes `---js`/`---javascript` blocks to an eval-based engine,
+  // so only plain YAML front matter may ever reach it.
+  if (!/^---\r?\n/.test(markdown)) {
+    throw new Error(`${filename}: Markdown 必须以 “---” Front Matter 开头`);
+  }
+  try {
+    return matter(markdown);
+  } catch (error) {
+    throw new Error(`${filename}: Front Matter 解析失败：${error instanceof Error ? error.message : error}`);
+  }
+}
+
 function parseArticle(markdown, filename, expectedSlug) {
-  const { data, content } = matter(markdown);
+  const { data, content } = parseFrontMatter(markdown, filename);
   const id = normalizeSlug(data.slug || parse(filename).name);
   if (!id || (expectedSlug && id !== expectedSlug)) {
     throw new Error("Markdown 中的 slug 与文件名不一致");
@@ -205,7 +231,7 @@ function parseArticle(markdown, filename, expectedSlug) {
 }
 
 function parseDraft(markdown, filename, expectedSlug) {
-  const { data, content } = matter(markdown);
+  const { data, content } = parseFrontMatter(markdown, filename);
   const id = normalizeSlug(data.slug || parse(filename).name);
   if (!id || (expectedSlug && id !== expectedSlug)) {
     throw new Error("草稿 Markdown 中的 slug 与文件名不一致");
@@ -330,7 +356,7 @@ async function atomicWrite(directory, filename, content) {
 }
 
 async function markDraftAsPublishedLocally(draftsDirectory, sourceDraft, articleSlug) {
-  const parsed = matter(sourceDraft.markdown);
+  const parsed = parseFrontMatter(sourceDraft.markdown, sourceDraft.filename);
   parsed.data.sourceArticle = articleSlug;
   await atomicWrite(
     draftsDirectory,
@@ -475,7 +501,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
           sendJson(response, 403, { error: "只允许通过本机回环地址使用博客编辑器" });
           return;
         }
-        if (!isAllowedOrigin(request.headers.origin)) {
+        if (!isAllowedOrigin(request.headers.origin, request.headers.host)) {
           sendJson(response, 403, { error: "只允许从本机博客编辑器发起请求" });
           return;
         }
@@ -684,7 +710,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
           if (wrotePost && destination) {
             await restorePublishedFiles(existingPost, destination, previousGeneratedSource).catch(() => {});
           }
-          sendJson(response, 500, { error: formatError(error, "Markdown 发布失败") });
+          sendJson(response, wrotePost ? 500 : 400, { error: formatError(error, "Markdown 发布失败") });
         }
       });
     },
