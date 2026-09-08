@@ -41,3 +41,10 @@
 - 已执行的验证：正文逐字匹配来源日报（仅移除重复标题和来源行）；content:generate 通过，共 44 篇；正式 GitHub Pages 子路径下 build:github 静态导出及 TypeScript 检查通过。本次只补文章，未修改应用逻辑；应用测试留由发布 CI 执行。
 - 写入者模型：GPT-6
 - 设备：TianhaodeMacBook-Pro（macOS 26.6.2，arm64）
+
+## 2026-09-08 21:04:43 Asia/Shanghai — 修复补发布遇到的 CI 路径检查失败
+
+- 阶段总结：9 月 6 日补发布与此前一次发布均因渲染测试请求根路径而收到 404；测试请求现按 GitHub Pages 构建环境使用仓库子路径，同时保留普通本地构建及用户站点的根路径。未修改应用行为。
+- 已执行的验证：模拟正式 GitHub Actions 环境执行 npm test，18 项全部通过；npm run lint 通过；文章静态导出已通过，后续仅修改测试；git diff --check 通过。
+- 写入者模型：GPT-6
+- 设备：TianhaodeMacBook-Pro（macOS 26.6.2，arm64）

@@ -13,8 +13,13 @@ async function render() {
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
+  const repository = process.env.GITHUB_REPOSITORY?.split("/")[1] ?? "";
+  const basePath = process.env.GITHUB_ACTIONS && repository && !repository.endsWith(".github.io")
+    ? `/${repository}`
+    : "";
+
   return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
+    new Request(`http://localhost${basePath}/`, { headers: { accept: "text/html" } }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
