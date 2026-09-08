@@ -1,5 +1,12 @@
 # 实施记录
 
+## 2026-09-08 19:15:11 Asia/Shanghai — 收紧 Markdown 引用样式
+
+- 阶段总结：引用块改用正文大小和墨色文字、深绿左边线及更浅的背景；缩小内外留白，清除首尾子元素多余边距，收紧多段引用的段间距。
+- 已执行的验证：`npm run lint`；`npm test`（18 项全部通过）；带 GitHub Pages /MyBlog 子路径环境的 `npm run build:github`；`git diff --check`；本地浏览器检查实际文章在 1440×900 和 390×844 下的引用显示，确认尾部空白消除、手机换行正常。本次仅调整 CSS，采用实际页面视觉验证，未新增重复样式声明的测试；构建仅有 chunk 体积提示。
+- 写入者模型：GPT-6
+- 设备：TianhaodeMacBook-Pro（macOS 26.6.2，arm64）
+
 ## 2026-09-07 01:33 Asia/Shanghai — 完善 CI 与部署验证
 
 - 阶段总结：新增 PR CI，执行依赖安装、lint、测试和静态导出；部署前增加 lint 与测试，并设置构建和部署超时；将 build/ 插件源码纳入 ESLint；忽略本地 .zcode/ 目录。本次配置更改在 main 上验证并提交，未包含 ci/validate 分支已有的独立安全修复提交。
