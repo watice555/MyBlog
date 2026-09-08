@@ -4,7 +4,7 @@ export const generatedPosts = [
     "id": "codex-新上下文管理机制-从-compact-到-history-notes-new-context",
     "title": "Codex 新上下文管理机制：从 Compact 到 History / Notes / New Context",
     "excerpt": "本文梳理Codex新上下文管理机制，指出其通过窗口化上下文、模型维护的笔记索引及可随机访问的历史，取代传统压缩摘要。该机制将上下文管理转化为Agent的主动能力，强调模型在状态序列化与重建中的关键作用，并分析了当前检索局限及未来演进方向。",
-    "category": "评论",
+    "category": "科技笔记",
     "aiParticipation": 4,
     "date": "2026.09.08",
     "readTime": "18 分钟",
