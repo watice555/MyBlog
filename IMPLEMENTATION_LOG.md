@@ -34,3 +34,10 @@
 - 已执行的验证：逐篇核对 9 月 2–5 日博客正文与来源日报一致（仅移除重复标题和来源行），确认简介及 front matter 可复用；`npm run content:generate` 通过；带正式 GitHub Pages 子路径环境的 `npm run build:github` 静态导出通过，TypeScript 检查通过；`git diff --check` 通过。本次只新增文章，不改应用或渲染逻辑，未重复运行应用测试套件。
 - 写入者模型：GPT-6
 - 设备：TianhaodeMacBook-Pro（macOS 26.6.2，arm64）
+
+## 2026-09-08 21:02:55 Asia/Shanghai — 补发布 9 月 6 日日报
+
+- 阶段总结：按用户要求新增 9 月 6 日合并日报文章，使用博客本地模型生成简介并更新文章索引。
+- 已执行的验证：正文逐字匹配来源日报（仅移除重复标题和来源行）；content:generate 通过，共 44 篇；正式 GitHub Pages 子路径下 build:github 静态导出及 TypeScript 检查通过。本次只补文章，未修改应用逻辑；应用测试留由发布 CI 执行。
+- 写入者模型：GPT-6
+- 设备：TianhaodeMacBook-Pro（macOS 26.6.2，arm64）
