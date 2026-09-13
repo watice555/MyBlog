@@ -33,9 +33,6 @@
   "exclude": [
     "node_modules",
     "build",
-    "db",
-    "drizzle.config.ts",
-    "examples",
     "worker"
   ]
 }
