@@ -65,7 +65,18 @@ async function generatePosts() {
 
   for (const filename of filenames) {
     const source = await readFile(join(postsDirectory, filename), "utf8");
-    const { data, content } = matter(source);
+    // gray-matter routes `---js`/`---javascript` blocks to an eval-based engine,
+    // so only plain YAML front matter may ever reach it.
+    if (!/^---\r?\n/.test(source)) {
+      throw new Error(`${filename}: Markdown 必须以 “---” Front Matter 开头`);
+    }
+    let data;
+    let content;
+    try {
+      ({ data, content } = matter(source));
+    } catch (error) {
+      throw new Error(`${filename}: Front Matter 解析失败：${error instanceof Error ? error.message : error}`);
+    }
     const body = content.trim();
     if (!body) throw new Error(`${filename}: 正文不能为空`);
 
