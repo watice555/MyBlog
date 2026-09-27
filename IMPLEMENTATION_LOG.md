@@ -55,3 +55,10 @@
 - 已执行的验证：npm ci；npm run lint；模拟 GitHub Pages /MyBlog 环境的 npm test（18/18）和 npm run build:github；npm audit --omit=dev（0 漏洞）；git diff --check。完整依赖审计仍报告开发依赖漏洞，本阶段未扩大升级范围。远程 PR CI 将在推送后执行，本地结果不等同于 CI 已通过。无可见界面改动，未进行人工视口检查。
 - 写入者模型：GPT-6
 - 设备：TianhaodeMacBook-Pro（macOS 27.0，arm64）
+
+## 2026-09-28 03:17:41 Asia/Shanghai — 核验并合并 PR #1、#2、#3
+
+- 阶段总结：逐项审查安全补丁、模板清理和依赖升级；确认 #2 仅移除 83 个锁定依赖且未升级保留的依赖。同步基线并触发真实 PR CI，按 #2 → #1 → #3 合并；#3 解决配置冲突并补修生产依赖审计发现的问题，更新 PR 描述。三个 PR 均已合并，本地 main 同步至 e73df8a。设置 main 必需检查为 GitHub Actions 的 validate，要求分支与 main 同步，禁止强推和删除；保留管理员豁免以兼容本仓库直接维护 main 的约定，故该门禁不限制管理员绕过。
+- 已执行的验证：#2 CI 36343472124（18/18）；#1 在 #2 合并后重跑 CI 36343606929（21/21）；#3 在 #1、#2 合并后的最终 head 35dd69c 上通过 CI 36343698636（21/21）。上述 CI 均实际完成 npm ci、lint、Vinext 构建及测试、GitHub Pages 静态导出。#3 本地生产依赖审计为 0 漏洞，开发依赖问题仍存在。合并后在主工作区 npm ci 成功；GitHub API 确认三个 PR 状态为 MERGED，分支保护设置已回读核验。未重复执行已通过的同代码本地测试；无可见界面改动，未做人工视口检查。最终日志提交推送后继续核验 Pages 部署。
+- 写入者模型：GPT-6
+- 设备：TianhaodeMacBook-Pro（macOS 27.0，arm64）
