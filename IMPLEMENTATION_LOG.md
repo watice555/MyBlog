@@ -48,3 +48,10 @@
 - 已执行的验证：模拟正式 GitHub Actions 环境执行 npm test，18 项全部通过；npm run lint 通过；文章静态导出已通过，后续仅修改测试；git diff --check 通过。
 - 写入者模型：GPT-6
 - 设备：TianhaodeMacBook-Pro（macOS 26.6.2，arm64）
+
+## 2026-09-28 03:15:11 Asia/Shanghai — 更新 PR #3 并修复当前依赖审计问题
+
+- 阶段总结：同步已验证的 PR #2 与最新 main；解决 ESLint 配置冲突，同时保留 hash 路由规则例外与 build/ 安全插件的 lint 覆盖。将 baseline-browser-mapping 从 2.10.30 更新到 2.11.26，修复本次 npm 审计发现的中危问题；未执行全量 audit fix。
+- 已执行的验证：npm ci；npm run lint；模拟 GitHub Pages /MyBlog 环境的 npm test（18/18）和 npm run build:github；npm audit --omit=dev（0 漏洞）；git diff --check。完整依赖审计仍报告开发依赖漏洞，本阶段未扩大升级范围。远程 PR CI 将在推送后执行，本地结果不等同于 CI 已通过。无可见界面改动，未进行人工视口检查。
+- 写入者模型：GPT-6
+- 设备：TianhaodeMacBook-Pro（macOS 27.0，arm64）
