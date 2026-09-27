@@ -796,12 +796,25 @@ textarea:focus-visible {
 .prose h3 { font-size: 22px; }
 
 .prose blockquote {
-  margin: 2.5em 0;
-  padding: 22px 30px;
-  border-left: 2px solid var(--coral);
-  background: rgba(220, 230, 221, 0.42);
-  color: var(--green);
-  font-size: 20px;
+  margin: 1.7em 0;
+  padding: 0.65em 1em;
+  border-left: 3px solid var(--green);
+  background: rgba(220, 230, 221, 0.24);
+  color: var(--ink);
+  font-size: 1em;
+  line-height: 1.85;
+}
+
+.prose blockquote > p {
+  margin-bottom: 1em;
+}
+
+.prose blockquote > :first-child {
+  margin-top: 0;
+}
+
+.prose blockquote > :last-child {
+  margin-bottom: 0;
 }
 
 .prose ul,
