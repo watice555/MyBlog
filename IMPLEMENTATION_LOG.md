@@ -62,3 +62,10 @@
 - 已执行的验证：#2 CI 36343472124（18/18）；#1 在 #2 合并后重跑 CI 36343606929（21/21）；#3 在 #1、#2 合并后的最终 head 35dd69c 上通过 CI 36343698636（21/21）。上述 CI 均实际完成 npm ci、lint、Vinext 构建及测试、GitHub Pages 静态导出。#3 本地生产依赖审计为 0 漏洞，开发依赖问题仍存在。合并后在主工作区 npm ci 成功；GitHub API 确认三个 PR 状态为 MERGED，分支保护设置已回读核验。未重复执行已通过的同代码本地测试；无可见界面改动，未做人工视口检查。最终日志提交推送后继续核验 Pages 部署。
 - 写入者模型：GPT-6
 - 设备：TianhaodeMacBook-Pro（macOS 27.0，arm64）
+
+## 2026-10-02 21:33:36 Asia/Shanghai — 本机文字助手切换至 Darkbloom Qwen3.8
+
+- 阶段总结：将被 Git 忽略的本机模型配置中 local_qwen 切换至 Darkbloom 的 EigenLabs/Qwen3.8-27B-4bit-mtp，并设置本机 API 鉴权；保留 DeepSeek 配置，更新本机使用说明并保存私有配置备份。配置与密钥均未纳入 Git。
+- 已执行的验证：通过项目实际 local-llm-plugin 中间件向 Darkbloom 发起摘要和校对请求，两项均返回 HTTP 200 和有效中文结果；校对正确识别“检察错别字”用词问题。配置权限为 600；确认本机配置及备份被 Git 忽略；git diff --check 通过。本阶段仅修改本机配置与阶段日志，无应用代码或发布内容变更，未重复运行 lint、全量应用测试或静态构建。
+- 写入者模型：GPT-6
+- 设备：TianhaodeMacBook-Pro（macOS 27.0.1，arm64）
