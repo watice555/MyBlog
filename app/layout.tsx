@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/source-serif-4/wght.css";
 import "@fontsource-variable/source-serif-4/wght-italic.css";
 import "./globals.css";
+import "./home.css";
 import { absoluteUrl, siteDescription, siteTitle, siteUrl } from "../lib/site";
 
 const repository = process.env.GITHUB_REPOSITORY?.split("/")[1] ?? "";

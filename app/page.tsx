@@ -33,7 +33,7 @@ export default function Home() {
     return () => window.removeEventListener("hashchange", syncRoute);
   }, []);
 
-  return <div className="site-shell">
+  return <div className={`site-shell${view.name === "home" ? " home-layout" : ""}`}>
     <SiteHeader active={view.name} editorEnabled={editorEnabled} />
     <main>
       {view.name === "home" && <HomeView articles={generatedPosts} />}

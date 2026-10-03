@@ -33,38 +33,42 @@ const EXTERNAL_PROJECTS = [
 
 
 export function HomeView({ articles }: { articles: readonly ArticleMetadata[] }) {
-return (
-          <>
-            <section className="hero" aria-labelledby="hero-title">
-              <div className="hero-copy">
-                <p className="eyebrow"><span /> COMMENTARY · FINANCE · TECHNOLOGY</p>
-                <h1 id="hero-title">在噪声里<br />辨认真实</h1>
-                <p className="hero-intro">这里写金融、科技，以及它们如何改变商业与生活。<br />记录事实，拆解叙事，也保留可被修正的判断。</p>
-                <a className="primary-link" href="#archive">开始阅读 <span aria-hidden="true">→</span></a>
-              </div>
-            </section>
-
-            <section className="latest" aria-labelledby="latest-title">
-              <div className="section-heading">
-                <div>
-                  <p className="section-kicker">RECENT ARTICLES</p>
-                  <h2 id="latest-title">最近文章</h2>
-                </div>
-                <a href="#archive">查看全部 {String(articles.length).padStart(2, "0")} <span aria-hidden="true">↗</span></a>
-              </div>
-              <div className="article-list">
-                {articles.slice(0, 3).map((article, index) => (
-                  <ArticleRow article={article} index={index + 1} key={article.id} />
-                ))}
-              </div>
-            </section>
-
-            <section className="home-note">
-              <p className="section-kicker">A CLEARER VIEW</p>
-              <p>在信息不断升温的时代，保持一份清醒的判断。</p>
-              <span aria-hidden="true">✦</span>
-            </section>
-          </>);
+  const latest = articles[0];
+  return <>
+    <section className="home-hero" aria-labelledby="hero-title">
+      <div className="home-intro">
+        <p className="eyebrow"><span />COMMENTARY · FINANCE · TECHNOLOGY</p>
+        <h1 id="hero-title">在噪声里<br />辨认真实</h1>
+        <p className="hero-intro">这里写金融、科技，以及它们如何改变商业与生活。<br />记录事实，拆解叙事，也保留可被修正的判断。</p>
+        <a className="primary-link" href="#recent">开始阅读 <span aria-hidden="true">↓</span></a>
+      </div>
+      {latest && <article className="featured-article" aria-labelledby="featured-title">
+        <p className="featured-label"><span />最新文章 <span className="featured-en">LATEST ENTRY</span></p>
+        <div className="featured-meta"><span>{latest.category}</span><time dateTime={latest.dateISO}>{latest.date}</time></div>
+        <h2 id="featured-title"><a href={articlePath(latest.id)}>{latest.title}</a></h2>
+        <p className="featured-excerpt">{latest.excerpt}</p>
+        <div className="featured-details"><span>{latest.wordCount.toLocaleString("zh-CN")} 字 · {latest.readTime}</span><AiParticipationIndicator value={latest.aiParticipation} variant="label" /></div>
+        <a className="primary-link" href={articlePath(latest.id)}>阅读全文 <span aria-hidden="true">↗</span></a>
+      </article>}
+    </section>
+    <section className="home-recent" id="recent" aria-labelledby="recent-title">
+      <div className="home-section-heading">
+        <div><h2 id="recent-title">最近文章</h2><span className="section-kicker">RECENT ARTICLES</span></div>
+        <a href="#archive">全部 {articles.length} 篇 <span aria-hidden="true">↗</span></a>
+      </div>
+      <div className="article-list">
+        {articles.slice(1, 5).map((article, index) => <article className="home-row" key={article.id}>
+          <span className="article-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+          <div className="article-body">
+            <div className="article-overline"><span>{article.category}</span><time dateTime={article.dateISO}>{article.date}</time><AiParticipationIndicator value={article.aiParticipation} variant="dots" /></div>
+            <h3><a href={articlePath(article.id)}>{article.title}</a></h3>
+            <p>{article.excerpt}</p>
+          </div>
+          <div className="article-tail"><span>{article.readTime}</span><a href={articlePath(article.id)} aria-label={`阅读《${article.title}》`}>↗</a></div>
+        </article>)}
+      </div>
+    </section>
+  </>;
 }
 
 export function AboutView() {

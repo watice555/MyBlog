@@ -245,6 +245,21 @@ test("server-renders the finished blog", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
 
+test("features the newest article without repeating it in the recent list", async () => {
+  const html = await render();
+  const featured = html.match(/<article class="featured-article"[\s\S]*?<\/article>/)?.[0];
+  const recent = html.match(/<section class="home-recent"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(featured, "the latest article is rendered in the introduction");
+  assert.ok(recent, "the recent list is rendered below the introduction");
+  assert.match(html, /href="#recent"/);
+  assert.match(recent, /id="recent"/);
+  const href = featured.match(/href="([^"]+)"/)?.[1];
+  assert.ok(href?.startsWith("article/"), "article links stay relative to the site path");
+  assert.ok(!recent.includes(`href="${href}"`), "the featured article is not listed twice");
+  assert.equal((recent.match(/<article /g) || []).length, 4);
+  assert.doesNotMatch(html, /本地布局预览|首页布局对比|home-note/);
+});
+
 test("ships GitHub Pages and social metadata", async () => {
   const [layout, nextConfig, workflow, packageJson] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
