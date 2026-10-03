@@ -4,7 +4,9 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import { extname, parse, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
-import matter from "gray-matter";
+import yaml from "js-yaml";
+import { calculateReadTime, countWords, normalizeDate, normalizeSlug, normalizeAiParticipation } from "../lib/content-utils.mjs";
+import { parseFrontMatter } from "../lib/front-matter.mjs";
 
 const execFileAsync = promisify(execFile);
 const postRoute = "/api/local-post";
@@ -15,6 +17,14 @@ const generateRoute = "/api/local-content-generate";
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const maxImageBytes = 12 * 1024 * 1024;
 
+/** @typedef {import("node:http").IncomingMessage} Request
+ * @typedef {import("node:http").ServerResponse} Response
+ * @typedef {ReturnType<typeof parseArticle>} Article
+ * @typedef {{filename: string, markdown: string, article: Article}} StoredArticle
+ * @typedef {{projectRoot: string, filename: string, markdown: string, title: string, isUpdate: boolean}} PublishInput
+ * @typedef {{commit: string, pushed: boolean, error?: string}} PublishResult */
+
+/** @param {Response} response @param {number} status @param {unknown} payload */
 function sendJson(response, status, payload) {
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -22,6 +32,7 @@ function sendJson(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
+/** @param {string | undefined} origin @param {string | undefined} host */
 function isAllowedOrigin(origin, host) {
   // A same-origin request carries an Origin that matches the Host header exactly
   // (hostname and port). Comparing only the hostname would let any page served
@@ -35,6 +46,7 @@ function isAllowedOrigin(origin, host) {
   }
 }
 
+/** @param {string | undefined} host */
 function isAllowedHost(host) {
   if (!host) return false;
   try {
@@ -44,24 +56,15 @@ function isAllowedHost(host) {
   }
 }
 
-function normalizeSlug(value) {
-  return String(value ?? "")
-    .normalize("NFKC")
-    .trim()
-    .toLocaleLowerCase("en-US")
-    .replace(/[\s_]+/g, "-")
-    .replace(/[^\p{L}\p{N}-]+/gu, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
+/** @param {unknown} error @param {string} fallback */
 function formatError(error, fallback) {
   if (!(error instanceof Error)) return fallback;
-  const stderr = typeof error.stderr === "string" ? error.stderr.trim() : "";
+  const stderr = "stderr" in error && typeof error.stderr === "string" ? error.stderr.trim() : "";
   const message = stderr || error.message || fallback;
   return message.length > 1800 ? `${message.slice(0, 1800)}…` : message;
 }
 
+/** @param {Request} request @returns {Promise<Record<string, unknown>>} */
 async function readJsonBody(request) {
   // Requiring application/json forces browsers through a CORS preflight before
   // a cross-origin write can reach these endpoints.
@@ -77,12 +80,15 @@ async function readJsonBody(request) {
     chunks.push(chunk);
   }
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("JSON 必须是对象");
+    return parsed;
   } catch {
     throw new Error("请求内容不是有效的 JSON");
   }
 }
 
+/** @param {Request} request */
 async function readImageBody(request) {
   const declaredSize = Number(request.headers["content-length"] || 0);
   if (declaredSize > maxImageBytes) throw new Error("图片不能超过 12 MB");
@@ -98,6 +104,7 @@ async function readImageBody(request) {
   return Buffer.concat(chunks);
 }
 
+/** @param {Buffer} buffer */
 function detectImageType(buffer) {
   if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
     return { extension: "png", mediaType: "image/png" };
@@ -121,6 +128,7 @@ function detectImageType(buffer) {
   throw new Error("只支持 PNG、JPEG、GIF、WebP 或 AVIF 图片");
 }
 
+/** @param {unknown} filename */
 function safeImageStem(filename) {
   let decodedName = "";
   try {
@@ -139,6 +147,7 @@ function safeImageStem(filename) {
     .slice(0, 48) || "image";
 }
 
+/** @param {Request} request @param {string} publicDirectory */
 async function saveImage(request, publicDirectory) {
   // The custom header forces browsers through a CORS preflight, so a plain
   // cross-origin form post cannot reach the filesystem write.
@@ -174,32 +183,14 @@ async function saveImage(request, publicDirectory) {
   };
 }
 
+/** @param {Record<string, unknown>} data @param {string} filename @param {{draft?: boolean}} options */
 function articleDate(data, filename, { draft = false } = {}) {
-  const rawDate = data.date instanceof Date
-    ? data.date.toISOString().slice(0, 10)
-    : String(data.date ?? "").trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) return rawDate;
+  const rawDate = String(data.date ?? "").trim();
   if (draft && !rawDate) return new Date().toISOString().slice(0, 10);
-  throw new Error(`${filename}: Markdown 日期必须使用 YYYY-MM-DD 格式`);
+  return normalizeDate(rawDate, filename);
 }
 
-function articleReadTime(body) {
-  return `${Math.max(1, Math.ceil(body.replace(/\s/g, "").length / 400))} 分钟`;
-}
-
-function parseFrontMatter(markdown, filename) {
-  // gray-matter routes `---js`/`---javascript` blocks to an eval-based engine,
-  // so only plain YAML front matter may ever reach it.
-  if (!/^---\r?\n/.test(markdown)) {
-    throw new Error(`${filename}: Markdown 必须以 “---” Front Matter 开头`);
-  }
-  try {
-    return matter(markdown);
-  } catch (error) {
-    throw new Error(`${filename}: Front Matter 解析失败：${error instanceof Error ? error.message : error}`);
-  }
-}
-
+/** @param {string} markdown @param {string} filename @param {string} [expectedSlug] */
 function parseArticle(markdown, filename, expectedSlug) {
   const { data, content } = parseFrontMatter(markdown, filename);
   const id = normalizeSlug(data.slug || parse(filename).name);
@@ -213,10 +204,7 @@ function parseArticle(markdown, filename, expectedSlug) {
   const body = content.trim();
   if (!body) throw new Error(`${filename}: Markdown 正文不能为空`);
 
-  const aiParticipation = data.aiParticipation;
-  if (!Number.isInteger(aiParticipation) || aiParticipation < 1 || aiParticipation > 5) {
-    throw new Error(`${filename}: aiParticipation 必须是 1 到 5 之间的整数`);
-  }
+  const aiParticipation = normalizeAiParticipation(data.aiParticipation, filename);
 
   return {
     id,
@@ -225,11 +213,14 @@ function parseArticle(markdown, filename, expectedSlug) {
     category: String(data.category ?? "评论").trim() || "评论",
     aiParticipation,
     date: rawDate.replaceAll("-", "."),
-    readTime: articleReadTime(body),
+    dateISO: rawDate,
+    wordCount: countWords(body),
+    readTime: calculateReadTime(body),
     content: body,
   };
 }
 
+/** @param {string} markdown @param {string} filename @param {string} [expectedSlug] */
 function parseDraft(markdown, filename, expectedSlug) {
   const { data, content } = parseFrontMatter(markdown, filename);
   const id = normalizeSlug(data.slug || parse(filename).name);
@@ -251,12 +242,15 @@ function parseDraft(markdown, filename, expectedSlug) {
     category: String(data.category ?? "评论").trim() || "评论",
     aiParticipation,
     date: rawDate.replaceAll("-", "."),
-    readTime: articleReadTime(body),
+    dateISO: rawDate,
+    wordCount: countWords(body),
+    readTime: calculateReadTime(body),
     content: body,
     ...(sourceArticleId ? { sourceArticleId } : {}),
   };
 }
 
+/** @param {unknown} value @param {string} label */
 function normalizeRecoveryId(value, label) {
   const rawValue = String(value ?? "").trim();
   if (!rawValue) return undefined;
@@ -267,11 +261,12 @@ function normalizeRecoveryId(value, label) {
   return normalized;
 }
 
-function normalizeRecoveryDraft(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+/** @param {unknown} input */
+function normalizeRecoveryDraft(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("临时文件缺少编辑内容");
   }
-
+  const value = /** @type {Record<string, unknown>} */ (input);
   const articleId = normalizeRecoveryId(value.articleId, "articleId");
   const draftId = normalizeRecoveryId(value.draftId, "draftId");
   const rawSlug = String(value.slug ?? "").trim();
@@ -280,6 +275,7 @@ function normalizeRecoveryDraft(value) {
   if (originalDate && !/^\d{4}[.-]\d{2}[.-]\d{2}$/.test(originalDate)) {
     throw new Error("临时文件中的日期无效");
   }
+  if (originalDate) normalizeDate(originalDate.replaceAll(".", "-"), "临时文件");
   const aiParticipation = Number(value.aiParticipation);
   if (!Number.isInteger(aiParticipation) || aiParticipation < 1 || aiParticipation > 5) {
     throw new Error("临时文件中的 aiParticipation 必须是 1 到 5 之间的整数");
@@ -298,12 +294,13 @@ function normalizeRecoveryDraft(value) {
   };
 }
 
+/** @param {string} recoveryPath */
 async function readRecoverySnapshot(recoveryPath) {
   let source;
   try {
     source = await readFile(recoveryPath, "utf8");
   } catch (error) {
-    if (error && typeof error === "object" && error.code === "ENOENT") return null;
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
     throw error;
   }
 
@@ -320,6 +317,7 @@ async function readRecoverySnapshot(recoveryPath) {
   return { draft: normalizeRecoveryDraft(payload.draft), savedAt };
 }
 
+/** @param {string} directory @param {string} slug @param {(source: string, filename: string) => Article} parser */
 async function findMarkdown(directory, slug, parser) {
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries) {
@@ -331,6 +329,7 @@ async function findMarkdown(directory, slug, parser) {
   return undefined;
 }
 
+/** @param {string} directory @param {(source: string, filename: string) => Article} parser */
 async function listMarkdown(directory, parser) {
   await mkdir(directory, { recursive: true });
   const entries = await readdir(directory, { withFileTypes: true });
@@ -343,6 +342,7 @@ async function listMarkdown(directory, parser) {
   return articles.sort((left, right) => right.date.localeCompare(left.date) || left.title.localeCompare(right.title, "zh-CN"));
 }
 
+/** @param {string} directory @param {string} filename @param {string} content */
 async function atomicWrite(directory, filename, content) {
   await mkdir(directory, { recursive: true });
   const temporary = resolve(directory, `.${filename}.${process.pid}.${randomUUID()}.tmp`);
@@ -355,16 +355,21 @@ async function atomicWrite(directory, filename, content) {
   }
 }
 
+/** @param {string} draftsDirectory @param {StoredArticle} sourceDraft @param {string} articleSlug */
 async function markDraftAsPublishedLocally(draftsDirectory, sourceDraft, articleSlug) {
   const parsed = parseFrontMatter(sourceDraft.markdown, sourceDraft.filename);
   parsed.data.sourceArticle = articleSlug;
+  // gray-matter.stringify(string, data) parses the string again, so a body
+  // beginning with ---js would execute its JavaScript engine. Serialize only
+  // the validated metadata and append the original body without parsing it.
   await atomicWrite(
     draftsDirectory,
     sourceDraft.filename,
-    matter.stringify(parsed.content.trim(), parsed.data),
+    `---\n${yaml.dump(parsed.data, { schema: yaml.JSON_SCHEMA })}---\n${parsed.content}`,
   );
 }
 
+/** @param {string} markdown @param {string} projectRoot */
 function referencedPostImages(markdown, projectRoot) {
   const imagesRoot = resolve(projectRoot, "public", "images", "posts");
   const paths = new Set();
@@ -382,6 +387,7 @@ function referencedPostImages(markdown, projectRoot) {
   return [...paths];
 }
 
+/** @param {string} projectRoot @param {string} intendedPostPath */
 async function assertNoOtherPostChanges(projectRoot, intendedPostPath) {
   const [{ stdout: tracked = "" }, { stdout: untracked = "" }] = await Promise.all([
     execFileAsync("git", ["-c", "core.quotePath=false", "diff", "--name-only", "HEAD", "--", "content/posts"], { cwd: projectRoot }),
@@ -394,6 +400,7 @@ async function assertNoOtherPostChanges(projectRoot, intendedPostPath) {
   }
 }
 
+/** @param {PublishInput} input @returns {Promise<PublishResult>} */
 async function publishPostToGit({ projectRoot, filename, markdown, title, isUpdate }) {
   const intendedPostPath = `content/posts/${filename}`;
   const { stdout: branchOutput = "" } = await execFileAsync("git", ["branch", "--show-current"], { cwd: projectRoot });
@@ -415,7 +422,7 @@ async function publishPostToGit({ projectRoot, filename, markdown, title, isUpda
     throw new Error(`发布前的静态构建未通过：${formatError(error, "构建失败")}`);
   }
 
-  const paths = [intendedPostPath, "app/generated-posts.ts", ...referencedPostImages(markdown, projectRoot)];
+  const paths = [intendedPostPath, "app/generated-posts.ts", "app/generated-post-content.ts", ...referencedPostImages(markdown, projectRoot)];
   try {
     await execFileAsync("git", ["add", "--", ...paths], { cwd: projectRoot });
     const { stdout: stagedOutput = "" } = await execFileAsync(
@@ -454,6 +461,9 @@ async function publishPostToGit({ projectRoot, filename, markdown, title, isUpda
   }
 }
 
+/** @param {string} projectRoot
+ * @param {{publishPost?: (input: PublishInput) => Promise<PublishResult>}} options
+ * @returns {import("vite").Plugin} */
 export default function createLocalPostsPlugin(projectRoot = process.cwd(), options = {}) {
   const postsDirectory = resolve(projectRoot, "content", "posts");
   const draftsDirectory = resolve(projectRoot, "content", "drafts");
@@ -461,7 +471,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
   const recoveryFilename = "editor-autosave.json";
   const recoveryPath = resolve(recoveryDirectory, recoveryFilename);
   const publicDirectory = resolve(projectRoot, "public");
-  const generatedPath = resolve(projectRoot, "app", "generated-posts.ts");
+  const generatedFiles = ["app/generated-posts.ts", "app/generated-post-content.ts", "public/search-index.json"];
   const generatorPath = resolve(projectRoot, "scripts", "generate-posts.mjs");
   const publishPost = options.publishPost || publishPostToGit;
   let generatedSourceHash = "";
@@ -476,16 +486,21 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
     return articles;
   }
 
+  /** @param {StoredArticle | undefined} existingPost @param {string} destination @param {(string | undefined)[]} previousGeneratedSource */
   async function restorePublishedFiles(existingPost, destination, previousGeneratedSource) {
     if (existingPost) {
       await atomicWrite(postsDirectory, existingPost.filename, existingPost.markdown);
     } else {
       await unlink(destination).catch(() => {});
     }
-    if (previousGeneratedSource === undefined) {
-      await unlink(generatedPath).catch(() => {});
-    } else {
-      await atomicWrite(resolve(projectRoot, "app"), "generated-posts.ts", previousGeneratedSource);
+    for (const [index, filename] of generatedFiles.entries()) {
+      const generatedPath = resolve(projectRoot, filename);
+      const source = previousGeneratedSource[index];
+      if (source === undefined) {
+        await unlink(generatedPath).catch(() => {});
+      } else {
+        await atomicWrite(resolve(generatedPath, ".."), parse(generatedPath).base, source);
+      }
     }
     generatedSourceHash = "";
   }
@@ -632,7 +647,8 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
 
         let existingPost;
         let destination;
-        let previousGeneratedSource;
+        /** @type {(string | undefined)[]} */
+        let previousGeneratedSource = [];
         let wrotePost = false;
         try {
           const input = await readJsonBody(request);
@@ -662,7 +678,10 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
             return;
           }
 
-          previousGeneratedSource = existsSync(generatedPath) ? await readFile(generatedPath, "utf8") : undefined;
+          previousGeneratedSource = await Promise.all(generatedFiles.map(async (filename) => {
+            const path = resolve(projectRoot, filename);
+            return existsSync(path) ? await readFile(path, "utf8") : undefined;
+          }));
           await atomicWrite(postsDirectory, filename, markdown);
           wrotePost = true;
           const articles = await loadPostsFromFiles();

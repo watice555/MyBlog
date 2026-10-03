@@ -4,10 +4,11 @@
   --paper: #f5f3ec;
   --paper-deep: #ebe9df;
   --ink: #1e2923;
-  --muted: #6d766f;
+  --muted: #58635b;
   --green: #315c48;
   --sage: #dce6dd;
   --coral: #e8664a;
+  --coral-text: #ad3923;
   --line: rgba(30, 41, 35, 0.17);
   --serif: "Source Serif 4 Variable", "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", serif;
   --sans: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
@@ -354,7 +355,7 @@ textarea:focus-visible {
 
 .ai-participation-label,
 .article-overline .ai-participation-label {
-  color: var(--coral);
+  color: var(--coral-text);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -432,7 +433,7 @@ textarea:focus-visible {
 }
 
 .home-note > span {
-  color: var(--coral);
+  color: var(--coral-text);
 }
 
 .inner-page,
@@ -1103,16 +1104,25 @@ textarea:focus-visible {
 }
 
 .editor-tip.autosave-failed span {
-  color: var(--coral);
+  color: var(--coral-text);
 }
 
 .recovery-gate {
   position: fixed;
   z-index: 100;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 24px;
+  width: min(620px, calc(100% - 48px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  overflow: auto;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.recovery-gate::backdrop {
   background: rgba(31, 35, 32, 0.68);
   backdrop-filter: blur(5px);
 }
@@ -1189,7 +1199,7 @@ textarea:focus-visible {
   border: 0;
   border-bottom: 1px solid currentColor;
   background: transparent;
-  color: var(--coral);
+  color: var(--coral-text);
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
@@ -1202,7 +1212,7 @@ textarea:focus-visible {
 
 .recovery-dialog .recovery-error {
   margin-top: 20px;
-  color: var(--coral);
+  color: var(--coral-text);
   font-weight: 700;
 }
 

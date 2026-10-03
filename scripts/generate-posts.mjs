@@ -1,22 +1,10 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, extname, join, parse } from "node:path";
+import { dirname, extname, join, parse, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import matter from "gray-matter";
+import { calculateReadTime, countWords, normalizeDate, normalizeSlug, normalizeAiParticipation, normalizeSearchText } from "../lib/content-utils.mjs";
+import { parseFrontMatter } from "../lib/front-matter.mjs";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
-const postsDirectory = join(projectRoot, "content", "posts");
-const outputFile = join(projectRoot, "app", "generated-posts.ts");
-
-function normalizeSlug(value) {
-  return String(value ?? "")
-    .normalize("NFKC")
-    .trim()
-    .toLocaleLowerCase("en-US")
-    .replace(/[\s_]+/g, "-")
-    .replace(/[^\p{L}\p{N}-]+/gu, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-|-$/g, "");
-}
 
 function requiredText(value, field, filename) {
   const text = String(value ?? "").trim();
@@ -24,35 +12,11 @@ function requiredText(value, field, filename) {
   return text;
 }
 
-function normalizeDate(value, filename) {
-  const date = value instanceof Date
-    ? value.toISOString().slice(0, 10)
-    : String(value ?? "").trim();
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    throw new Error(`${filename}: date 必须使用 YYYY-MM-DD 格式`);
-  }
-
-  const parsed = new Date(`${date}T00:00:00.000Z`);
-  if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== date) {
-    throw new Error(`${filename}: date 不是有效日期`);
-  }
-  return date;
-}
-
-function normalizeAiParticipation(value, filename) {
-  if (!Number.isInteger(value) || value < 1 || value > 5) {
-    throw new Error(`${filename}: aiParticipation 必须是 1 到 5 之间的整数`);
-  }
-  return value;
-}
-
-function calculateReadTime(content) {
-  const characters = content.replace(/\s/g, "").length;
-  return `${Math.max(1, Math.ceil(characters / 400))} 分钟`;
-}
-
-async function generatePosts() {
+/** Generate in an explicit root so tests can use disposable article collections.
+ * @param {string} root */
+export async function generatePosts(root = projectRoot) {
+  const postsDirectory = join(root, "content", "posts");
+  const outputFile = join(root, "app", "generated-posts.ts");
   await mkdir(postsDirectory, { recursive: true });
   const entries = await readdir(postsDirectory, { withFileTypes: true });
   const filenames = entries
@@ -65,18 +29,7 @@ async function generatePosts() {
 
   for (const filename of filenames) {
     const source = await readFile(join(postsDirectory, filename), "utf8");
-    // gray-matter routes `---js`/`---javascript` blocks to an eval-based engine,
-    // so only plain YAML front matter may ever reach it.
-    if (!/^---\r?\n/.test(source)) {
-      throw new Error(`${filename}: Markdown 必须以 “---” Front Matter 开头`);
-    }
-    let data;
-    let content;
-    try {
-      ({ data, content } = matter(source));
-    } catch (error) {
-      throw new Error(`${filename}: Front Matter 解析失败：${error instanceof Error ? error.message : error}`);
-    }
+    const { data, content } = parseFrontMatter(source, filename);
     const body = content.trim();
     if (!body) throw new Error(`${filename}: 正文不能为空`);
 
@@ -96,6 +49,8 @@ async function generatePosts() {
       category: String(data.category ?? "评论").trim() || "评论",
       aiParticipation: normalizeAiParticipation(data.aiParticipation, filename),
       date: date.replaceAll("-", "."),
+      dateISO: date,
+      wordCount: countWords(body),
       readTime: calculateReadTime(body),
       content: body,
       sortDate: date,
@@ -110,8 +65,9 @@ async function generatePosts() {
     category: post.category,
     aiParticipation: post.aiParticipation,
     date: post.date,
+    dateISO: post.dateISO,
+    wordCount: post.wordCount,
     readTime: post.readTime,
-    content: post.content,
   }));
   const output = [
     "// 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。",
@@ -121,10 +77,22 @@ async function generatePosts() {
 
   await mkdir(dirname(outputFile), { recursive: true });
   await writeFile(outputFile, output, "utf8");
-  console.log(`已从 content/posts 生成 ${publicPosts.length} 篇文章。`);
+  await writeFile(join(root, "app", "generated-post-content.ts"), [
+    "// 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。",
+    `export const generatedPostContent: Record<string, string> = ${JSON.stringify(Object.fromEntries(posts.map((post) => [post.id, post.content])), null, 2)};`,
+    "",
+  ].join("\n"), "utf8");
+  await mkdir(join(root, "public"), { recursive: true });
+  await writeFile(join(root, "public", "search-index.json"), JSON.stringify(posts.map((post) => ({
+    id: post.id,
+    text: normalizeSearchText([post.title, post.excerpt, post.category, post.content].join("\n")),
+  }))), "utf8");
+  return publicPosts;
 }
 
-generatePosts().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  generatePosts().then((posts) => console.log(`已从 content/posts 生成 ${posts.length} 篇文章。`)).catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

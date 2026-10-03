@@ -1,32 +1,37 @@
-import { execFile } from "node:child_process";
 import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
-import { promisify } from "node:util";
-import { pathToFileURL } from "node:url";
-import matter from "gray-matter";
+import { parseFrontMatter } from "../lib/front-matter.mjs";
 import createLocalLlmPlugin from "../build/local-llm-plugin.mjs";
 import createLocalPostsPlugin from "../build/local-posts-plugin.mjs";
+import { generatePosts } from "../scripts/generate-posts.mjs";
+
+// Structural checks span the same UI responsibilities after component extraction.
+async function readUiSource() {
+  const directories = [new URL("../app/", import.meta.url), new URL("../lib/", import.meta.url)];
+  const sources = [];
+  for (const directory of directories) {
+    for (const file of await readdir(directory, { recursive: true })) {
+      if (!/\.tsx?$/.test(file) || file.includes("generated-post")) continue;
+      sources.push(await readFile(new URL(file, directory), "utf8"));
+    }
+  }
+  return sources.join("\n");
+}
 
 async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
   const repository = process.env.GITHUB_REPOSITORY?.split("/")[1] ?? "";
   const basePath = process.env.GITHUB_ACTIONS && repository && !repository.endsWith(".github.io")
     ? `/${repository}`
     : "";
 
-  return worker.fetch(
-    new Request(`http://localhost${basePath}/`, { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
-  );
+  // Vinext now prerenders through the actual Worker build, which imports
+  // cloudflare:workers and cannot run in Node's ESM loader. Check that real
+  // server-rendered artifact without mocking the runtime or opening a port.
+  return readFile(new URL(`../dist/client${basePath}/index.html`, import.meta.url), "utf8");
 }
 
 function normalizeSlug(value) {
@@ -220,9 +225,7 @@ async function requestLocalImage(
 }
 
 test("server-renders the finished blog", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  const html = await response.text();
+  const html = await render();
 
   assert.match(html, /<title>凝泠｜watice’s blog<\/title>/);
   assert.match(html, /在噪声里/);
@@ -260,22 +263,22 @@ test("ships GitHub Pages and social metadata", async () => {
 
 test("renders GFM tables and mathematical formulas with responsive styles", async () => {
   const [page, layout, styles, packageJson] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /import ReactMarkdown from "react-markdown"/);
+  assert.match(page, /import ReactMarkdown.*from "react-markdown"/);
   assert.match(page, /import remarkGfm from "remark-gfm"/);
   assert.match(page, /import remarkMath from "remark-math"/);
   assert.match(page, /import rehypeKatex from "rehype-katex"/);
-  assert.match(page, /remarkPlugins=\{\[remarkGfm, remarkMath\]\}/);
-  assert.match(page, /rehypePlugins=\{\[rehypeKatex\]\}/);
+  assert.match(page, /const remarkPlugins = \[remarkGfm, remarkMath\]/);
+  assert.match(page, /trust: false/);
   assert.match(page, /normalizeMathDelimiters\(source\)/);
-  assert.match(page, /function escapeLiteralDollarSigns\(source: string\)/);
   assert.match(page, /\[A-Z\]\[A-Z0-9\]\{1,\}/);
-  assert.match(page, /return escapeLiteralDollarSigns\(source\)/);
+  assert.match(page, /defaultUrlTransform\(url\)/);
+  assert.doesNotMatch(page, /rehypeRaw|rehype-raw/);
   assert.match(page, /className="table-scroll"/);
   assert.match(page, /content:\s*""/);
   assert.match(page, /placeholder="从这里开始写下今天的想法……"/);
@@ -304,7 +307,8 @@ test("renders GFM tables and mathematical formulas with responsive styles", asyn
   assert.doesNotMatch(styles, /\.article-body > p\s*\{[\s\S]*?max-width:\s*700px/);
   assert.match(styles, /--serif:\s*"Source Serif 4 Variable", "Songti SC", "STSong"/);
   assert.doesNotMatch(styles, /Georgia/);
-  assert.match(layout, /import "katex\/dist\/katex\.min\.css"/);
+  assert.doesNotMatch(layout, /import "katex\/dist\/katex\.min\.css"/);
+  assert.match(page, /import "katex\/dist\/katex\.min\.css"/);
   assert.match(packageJson, /"@fontsource-variable\/source-serif-4"/);
   assert.match(packageJson, /"react-markdown"/);
   assert.match(packageJson, /"remark-gfm"/);
@@ -314,23 +318,21 @@ test("renders GFM tables and mathematical formulas with responsive styles", asyn
 
 test("supports editing and updating existing articles", async () => {
   const [page, styles] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /articleId\?: string/);
-  assert.match(page, /const editArticle = async \(article: Article\)/);
   assert.match(page, /value\.startsWith\("editor\/"\)/);
-  assert.match(page, /\{ name: "editor", id: decodeURIComponent\(value\.slice\(7\)\) \}/);
-  assert.match(page, /window\.location\.assign\(`#editor\/\$\{encodeURIComponent\(article\.id\)\}`\)/);
+  assert.match(page, /\{ name: "editor", id: value\.slice\(7\) \}/);
+  assert.match(page, /href=\{`\.\.\/\.\.\/#editor\/\$\{encodeURIComponent\(id\)\}`\}/);
   assert.match(page, /const restoreEditorDraft = \(\) =>/);
   assert.match(page, /articles\.find\(\(candidate\) => candidate\.id === currentView\.id\)/);
   assert.match(page, /draftRef\.current\.articleId !== article\.id \|\| draftRef\.current\.draftId/);
   assert.doesNotMatch(page, /localArticles|corner-posts|corner-draft|localStorage/);
-  assert.match(page, /onEdit=\{editArticle\}/);
-  assert.match(page, />编辑文章<\/button>/);
+  assert.match(page, />编辑文章<\/a>/);
   assert.match(page, /className="reading-topbar"/);
-  assert.equal(page.match(/onClick=\{\(\) => onEdit\(article\)\}>编辑文章<\/button>/g)?.length, 2);
+  assert.equal(page.match(/<LocalArticleActions id=\{article.id\} \/>/g)?.length, 2);
   assert.doesNotMatch(page, /AI · \$\{label\}/);
   assert.match(page, /draft\.articleId \? "正式保存修改" : "正式保存并发布"/);
   assert.match(page, /onClick=\{saveMarkdownToProject\}/);
@@ -341,7 +343,7 @@ test("supports editing and updating existing articles", async () => {
 
 test("keeps author controls local and hides them from public readers", async () => {
   const [page, startScript, readme] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../scripts/start-local-editor.command", import.meta.url), "utf8"),
     readFile(new URL("../README.md", import.meta.url), "utf8"),
   ]);
@@ -352,7 +354,8 @@ test("keeps author controls local and hides them from public readers", async () 
   assert.doesNotMatch(page, /className="sync-link"/);
   assert.match(page, /<a className="editor-link"/);
   assert.match(page, /view\.name === "editor" && editorEnabled/);
-  assert.equal(page.match(/canEdit && <button type="button" onClick=\{\(\) => onEdit\(article\)\}>编辑文章<\/button>/g)?.length, 2);
+  assert.match(page, /return enabled \? <a href=/);
+  assert.match(page, /lazy\(\(\) => import\("\.\/components\/local-workspace"\)\)/);
   assert.match(page, /if \(!localEditorAvailable\(\)\) \{/);
   assert.match(page, /window\.setInterval\(refreshWhenVisible, 2000\)/);
   assert.match(startScript, /PORT="\$\{PORT:-3000\}"/);
@@ -363,13 +366,14 @@ test("keeps author controls local and hides them from public readers", async () 
 
 test("offers public article search and category filtering", async () => {
   const [page, styles] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /const \[searchQuery, setSearchQuery\] = useState\(""\)/);
   assert.match(page, /const \[selectedCategory, setSelectedCategory\] = useState\(""\)/);
-  assert.match(page, /article\.title, article\.excerpt, article\.content, article\.category/);
+  assert.match(page, /fetch\("\.\/search-index\.json"\)/);
+  assert.match(page, /index\?\.get\(article\.id\)\?\.includes\(keyword\)/);
   assert.match(page, /aria-label="文章搜索与分类筛选"/);
   assert.match(page, /placeholder="搜索标题、摘要或正文"/);
   assert.match(page, /aria-pressed=\{selectedCategory === category\}/);
@@ -379,9 +383,22 @@ test("offers public article search and category filtering", async () => {
   assert.match(styles, /\.category-options button\.active\s*\{/);
 });
 
+test("keeps recovery modal and unsaved navigation protection after view extraction", async () => {
+  const [hook, dialog, home] = await Promise.all([
+    readFile(new URL("../app/hooks/use-local-editor.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/recovery-dialog.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(home, /editorEnabled && workspaceOpened/);
+  assert.match(hook, /if \(!editorEnabled\) return;\s*const warnBeforeLeaving[\s\S]*?draftSignature\(draftRef.current\)[\s\S]*?"beforeunload"[\s\S]*?\}, \[editorEnabled\]\)/);
+  assert.match(dialog, /dialog\?\.showModal\(\)/);
+  assert.match(dialog, /previousFocus\?\.focus\(\)/);
+  assert.match(dialog, /onCancel=\{\(event\) => event.preventDefault\(\)\}/);
+});
+
 test("stores numeric AI participation levels and maps them to public labels", async () => {
   const [page, styles, generator, localPostsPlugin] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../scripts/generate-posts.mjs", import.meta.url), "utf8"),
     readFile(new URL("../build/local-posts-plugin.mjs", import.meta.url), "utf8"),
@@ -403,16 +420,17 @@ test("stores numeric AI participation levels and maps them to public labels", as
   assert.match(styles, /\.ai-slider-ticks\s*\{/);
   assert.match(styles, /\.ai-participation-indicator\s*\{/);
   assert.match(styles, /\.ai-participation-dot\.active\s*\{[\s\S]*?background: var\(--coral\)/);
-  assert.match(styles, /\.ai-participation-label,[\s\S]*?color: var\(--coral\)/);
+  assert.match(styles, /\.ai-participation-label,[\s\S]*?color: var\(--coral-text\)/);
   assert.doesNotMatch(styles, /\.ai-slider-labels\s*\{/);
   assert.match(generator, /normalizeAiParticipation\(data\.aiParticipation, filename\)/);
-  assert.match(generator, /Number\.isInteger\(value\)/);
-  assert.match(localPostsPlugin, /const aiParticipation = data\.aiParticipation/);
+  const contentUtils = await readFile(new URL("../lib/content-utils.mjs", import.meta.url), "utf8");
+  assert.match(contentUtils, /Number\.isInteger\(value\)/);
+  assert.match(localPostsPlugin, /normalizeAiParticipation\(data\.aiParticipation, filename\)/);
 });
 
 test("shows the project index beside the about introduction", async () => {
   const [page, styles] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
@@ -451,7 +469,7 @@ test("shows the project index beside the about introduction", async () => {
 
 test("generates the article list from Markdown Front Matter", async () => {
   const [page, packageJson, generator, generated, localPostsPlugin, filenames] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../scripts/generate-posts.mjs", import.meta.url), "utf8"),
     readFile(new URL("../app/generated-posts.ts", import.meta.url), "utf8"),
@@ -463,7 +481,7 @@ test("generates the article list from Markdown Front Matter", async () => {
   assert.ok(markdownFiles.length >= 3);
   for (const filename of markdownFiles) {
     const source = await readFile(new URL(`../content/posts/${filename}`, import.meta.url), "utf8");
-    const { data, content } = matter(source);
+    const { data, content } = parseFrontMatter(source, filename);
     assert.ok(data.slug);
     assert.ok(data.title);
     assert.match(String(data.date instanceof Date ? data.date.toISOString().slice(0, 10) : data.date), /^\d{4}-\d{2}-\d{2}$/);
@@ -601,9 +619,7 @@ test("fails content generation when a post uses a non-YAML front matter delimite
   const projectRoot = await mkdtemp(resolve(tmpdir(), "watice-generator-"));
   testContext.after(() => rm(projectRoot, { recursive: true, force: true }));
   const postsDirectory = resolve(projectRoot, "content", "posts");
-  const scriptsDirectory = resolve(projectRoot, "scripts");
   await mkdir(postsDirectory, { recursive: true });
-  await mkdir(scriptsDirectory, { recursive: true });
   // If gray-matter ever evaluates this block, the canary file appears.
   const canaryPath = resolve(projectRoot, "pwned.txt");
   await writeFile(
@@ -611,25 +627,11 @@ test("fails content generation when a post uses a non-YAML front matter delimite
     `---js\n({ title: require("fs").writeFileSync(${JSON.stringify(canaryPath)}, "1") })\n---\n\n正文。\n`,
     "utf8",
   );
-  // The copy runs from a temp directory, so point its gray-matter import at the
-  // repository's installed copy.
-  const nodeRequire = createRequire(import.meta.url);
-  const generatorSource = await readFile(new URL("../scripts/generate-posts.mjs", import.meta.url), "utf8");
-  await writeFile(
-    resolve(scriptsDirectory, "generate-posts.mjs"),
-    generatorSource.replace(
-      'import matter from "gray-matter";',
-      `import matter from ${JSON.stringify(pathToFileURL(nodeRequire.resolve("gray-matter")).href)};`,
-    ),
-    "utf8",
-  );
-
-  const execFileAsync = promisify(execFile);
   await assert.rejects(
-    execFileAsync(process.execPath, [resolve(scriptsDirectory, "generate-posts.mjs")]),
+    generatePosts(projectRoot),
     (error) => {
-      assert.match(String(error.stderr || ""), /evil\.md/);
-      assert.match(String(error.stderr || ""), /Front Matter/);
+      assert.match(error.message, /evil\.md/);
+      assert.match(error.message, /Front Matter/);
       return true;
     },
   );
@@ -863,7 +865,7 @@ excerpt: ""
 
 test("exposes the local draft box and one-click publish workflow only in the editor", async () => {
   const [page, styles, localPostsPlugin, gitignore] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../build/local-posts-plugin.mjs", import.meta.url), "utf8"),
     readFile(new URL("../.gitignore", import.meta.url), "utf8"),
@@ -899,7 +901,7 @@ test("exposes the local draft box and one-click publish workflow only in the edi
 
 test("keeps local AI writing tools author-oriented and suggestion-only", async (testContext) => {
   const [page, viteConfig, localLlmPlugin, gitignore] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
     readFile(new URL("../build/local-llm-plugin.mjs", import.meta.url), "utf8"),
     readFile(new URL("../.gitignore", import.meta.url), "utf8"),
@@ -983,7 +985,7 @@ test("keeps local AI writing tools author-oriented and suggestion-only", async (
 
 test("uploads article images into the public post asset directory", async () => {
   const [page, styles, localPostsPlugin, readme] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readUiSource(),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../build/local-posts-plugin.mjs", import.meta.url), "utf8"),
     readFile(new URL("../README.md", import.meta.url), "utf8"),

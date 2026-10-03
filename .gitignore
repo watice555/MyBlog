@@ -43,3 +43,7 @@ next-env.d.ts
 /.local/
 /.zcode/
 /content/drafts/
+
+# Rebuilt from published Markdown; never include drafts in this index.
+/public/search-index.json
+*.tsbuildinfo

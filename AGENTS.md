@@ -2,38 +2,48 @@
 
 ## Project Structure & Module Organization
 
-`app/` contains the Next.js/Vinext UI, metadata, styles, and generated article data. `content/posts/*.md` is the source of truth for published writing; `scripts/generate-posts.mjs` validates those files and regenerates `app/generated-posts.ts`, which must not be edited by hand. `build/local-posts-plugin.mjs` implements the localhost-only post and image write APIs used by the browser editor, while `vite.config.ts` wires the local plugins and Cloudflare runtime together. Tests live in `tests/`, public assets live in `public/`, and GitHub Pages deployment is defined in `.github/workflows/deploy.yml`.
+`app/` contains the Next.js/Vinext UI, metadata, styles, and generated article data. `content/posts/*.md` is the source of truth for published writing. `scripts/generate-posts.mjs` validates those files and generates `app/generated-posts.ts` (metadata only), `app/generated-post-content.ts` (server-only full bodies), and `public/search-index.json` (on-demand normalized full-text search); never edit these outputs by hand. Keep the full-body module out of client imports. Public views and editor components live in `app/components/`, with search and local editing state in `app/hooks/`. `app/article/[slug]/page.tsx` statically renders each article. `lib/site.ts` owns public URLs/SEO helpers, `lib/content-utils.mjs` owns browser-safe content rules, and `lib/front-matter.mjs` owns server-side YAML parsing.
+
+`build/local-posts-plugin.mjs` implements the localhost-only post and image write APIs, and `build/local-llm-plugin.mjs` implements the local writing-assistant API. `vite.config.ts` wires the plugins and Cloudflare runtime together. Tests live in `tests/`, public assets live in `public/`, and GitHub Pages deployment is defined in `.github/workflows/deploy.yml`.
 
 Treat `.next/`, `.vinext/`, `dist/`, `out/`, `.wrangler/`, `node_modules/`, and `.local/` as generated or machine-local material. `.local/` may contain private LLM configuration and must never be committed. Images intentionally saved under `public/images/posts/` are published article assets and should be committed with the article that uses them.
+
+`public/search-index.json` is ignored and regenerated for builds; do not stage it. The two generated TypeScript article modules are tracked and must remain synchronized with the Markdown sources.
 
 ## Build, Test, and Development Commands
 
 - `npm install`: install dependencies for local development; CI uses `npm ci`.
 - `npm run edit:local`: start the development server and open the localhost editor directly.
 - `npm run dev`: regenerate article data and start the Vinext development server.
-- `npm run content:generate`: validate `content/posts/` and regenerate `app/generated-posts.ts`.
-- `npm run lint`: regenerate article data and run ESLint.
+- `npm run content:generate`: validate `content/posts/` and regenerate both article modules plus the search index.
+- `npm run lint`: regenerate article data, run ESLint, and strictly type-check the local plugins.
+- `npm run typecheck:local`: run strict `checkJs` using `tsconfig.local.json` for local plugins and shared content utilities.
 - `npm run build`: create the Cloudflare/Vinext production build.
 - `npm run build:github`: create the static Next.js export used by GitHub Pages.
-- `npm test`: build the Vinext worker and run the rendered HTML and repository behavior tests.
+- `npm test`: build the Vinext worker and run the rendered HTML, local API, content-pipeline, and repository behavior tests.
+- `npm run test:export`: verify the already-built `out/` static export, including article HTML/metadata, RSS, sitemap, robots, and client content separation; run after `npm run build:github`.
 
-Run the narrowest relevant checks first, then run `npm run lint` and `npm test` for application, editor, rendering, or local API changes. Run `npm run build:github` when metadata, routing, static assets, or deployment behavior changes.
+Run the narrowest relevant checks first, then run `npm run lint` and `npm test` for application, editor, rendering, or local API changes. Run `npm run build:github` followed by `npm run test:export` when metadata, routing, static assets, or deployment behavior changes. Preserve both root-hosted and GitHub Pages project-subpath behavior; CI tests the project subpath explicitly.
 
 ## Coding Style & Testing
 
-Use TypeScript/React with 2-space indentation, double quotes, semicolons, and the existing functional-component and hook patterns. Keep browser state, Markdown rendering, local editor behavior, filesystem writes, and generated content responsibilities separate. Preserve hash-based routes and GitHub Pages subpath compatibility; use relative application URLs rather than assuming the site is hosted at `/`.
+Use TypeScript/React with 2-space indentation, double quotes, semicolons, and the existing functional-component and hook patterns. Keep browser state, Markdown rendering, local editor behavior, filesystem writes, and generated content responsibilities separate. Preserve independent `article/{slug}/` URLs, legacy `#article/{slug}` redirects, and hash navigation for home/archive/about/editor. Keep GitHub Pages subpath compatibility; use relative application URLs rather than assuming the site is hosted at `/`. Maintain RSS (`feed.xml`), sitemap, robots, and per-article metadata/JSON-LD using `lib/site.ts`; `NEXT_PUBLIC_SITE_URL` configures the public canonical origin and path.
 
 Add focused tests in `tests/rendered-html.test.mjs` when changing public rendering, author-only controls, Markdown behavior, image handling, or local write endpoints. Public builds must not expose editor controls or localhost-only API behavior. For visible UI changes, also inspect the local site at common desktop and mobile widths when practical.
 
+Use `tests/content-pipeline.test.mjs` for content validation, hundreds-of-articles generation, and generated-artifact rollback. Use `tests/static-export.check.mjs` for published HTML and SEO checks. Normalize search text once during generation and load the search index on demand rather than placing full bodies in the homepage client bundle.
+
 ## Content & Generated Files
 
-Each file in `content/posts/` must contain non-empty Markdown plus valid front matter. `title` and `date` are required, `date` uses `YYYY-MM-DD`, `slug` must be unique, `category` defaults to `评论`, and `excerpt` is optional. Preserve an author's wording, slugs, dates, and article files unless content editing is explicitly in scope. Do not delete or replace posts merely to make tests pass.
+Each file in `content/posts/` must contain non-empty Markdown plus valid plain YAML front matter. `title` and `date` are required; `date` must be a real calendar date in `YYYY-MM-DD` form. `slug` must be unique after normalization, `category` defaults to `评论`, `aiParticipation` is an integer from 1 to 5, and `excerpt` is optional. Parse dates as strings with the restricted YAML schema before validating them; YAML timestamp coercion must not silently normalize impossible dates. Preserve an author's wording, slugs, dates, and article files unless content editing is explicitly in scope. Do not delete or replace posts merely to make tests pass.
 
-After adding, editing, renaming, or deleting a post, run `npm run content:generate` and include the corresponding `app/generated-posts.ts` update in the same commit. Keep post image references portable and store publishable uploads under `public/images/posts/年/月/`.
+After adding, editing, renaming, or deleting a post, run `npm run content:generate` and include corresponding updates to both `app/generated-posts.ts` and `app/generated-post-content.ts` in the same commit. Metadata stores both ISO `dateISO` and display `date`, plus the shared reading-time/character-count estimate. Keep post image references portable and store publishable uploads under `public/images/posts/年/月/`.
 
 ## Local Editor Safety
 
 The editor and filesystem APIs are intentionally local-only. Preserve loopback-host checks, allowed-origin validation, HTTP method restrictions, path normalization, filename collision handling, MIME and file-signature validation, upload size limits, and safe writes inside `content/posts/` and `public/images/posts/`. Fail closed on ambiguous or malformed input. Do not add remote write access, authentication tokens, secrets, or automatic GitHub publishing to the browser editor.
+
+Preserve exact same-origin checks including ports, JSON Content-Type checks, and the plain-YAML delimiter gate before parsing; never allow executable front-matter engines. The existing explicitly requested local publish action stages the selected article, both generated article modules, and referenced images. Failures before a successful commit must restore the article and all three generated artifacts, including the ignored search index; a push failure after a successful commit must retain that commit and its files.
 
 Use disposable files for API tests. Never point destructive validation at unrelated user files, and never commit browser drafts, local model settings, logs, caches, credentials, or absolute personal paths.
 

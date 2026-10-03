@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 const route = "/api/local-summary";
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
+/** @param {import("node:http").ServerResponse} response @param {number} status @param {unknown} payload */
 function sendJson(response, status, payload) {
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -11,6 +12,7 @@ function sendJson(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
+/** @param {string | undefined} origin @param {string | undefined} host */
 function isAllowedOrigin(origin, host) {
   // A same-origin request carries an Origin that matches the Host header exactly
   // (hostname and port). Comparing only the hostname would let any page served
@@ -24,6 +26,7 @@ function isAllowedOrigin(origin, host) {
   }
 }
 
+/** @param {string | undefined} host */
 function isAllowedHost(host) {
   if (!host) return false;
   try {
@@ -33,6 +36,7 @@ function isAllowedHost(host) {
   }
 }
 
+/** @param {import("node:http").IncomingMessage} request @returns {Promise<Record<string, unknown>>} */
 async function readJsonBody(request) {
   const chunks = [];
   let size = 0;
@@ -42,12 +46,15 @@ async function readJsonBody(request) {
     chunks.push(chunk);
   }
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("JSON 必须是对象");
+    return parsed;
   } catch {
     throw new Error("请求内容不是有效的 JSON");
   }
 }
 
+/** @param {string} configPath */
 async function loadSettings(configPath) {
   const config = JSON.parse(await readFile(configPath, "utf8"));
   const provider = String(config.provider || "").trim();
@@ -83,6 +90,7 @@ async function loadSettings(configPath) {
   };
 }
 
+/** @param {unknown} value */
 function cleanSummary(value) {
   return String(value || "")
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -94,6 +102,7 @@ function cleanSummary(value) {
     .slice(0, 140);
 }
 
+/** @param {unknown} value */
 function cleanSuggestions(value) {
   return String(value || "")
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -102,6 +111,7 @@ function cleanSuggestions(value) {
     .slice(0, 12000);
 }
 
+/** @param {"summary" | "proofread"} task */
 function instructionsFor(task) {
   if (task === "proofread") {
     return [
@@ -123,6 +133,7 @@ function instructionsFor(task) {
   ].join("\n");
 }
 
+/** @param {{task: "summary" | "proofread", title: string, content: string, configPath: string, fetchImpl: typeof fetch}} input */
 async function requestCompletion({ task, title, content, configPath, fetchImpl }) {
   const settings = await loadSettings(configPath);
   if (!settings.model) throw new Error(`provider ${settings.provider} 没有配置 model`);
@@ -141,9 +152,10 @@ async function requestCompletion({ task, title, content, configPath, fetchImpl }
       ? settings.proofreadingMaxOutputTokens
       : settings.summaryMaxOutputTokens,
     stream: false,
+    ...(settings.reasoningEffort ? { reasoning_effort: settings.reasoningEffort } : {}),
   };
-  if (settings.reasoningEffort) payload.reasoning_effort = settings.reasoningEffort;
 
+  /** @type {Record<string, string>} */
   const headers = { "Content-Type": "application/json" };
   if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`;
   const endpoint = new URL(`${settings.baseUrl.pathname.replace(/\/$/, "")}/chat/completions`, settings.baseUrl);
@@ -177,6 +189,7 @@ async function requestCompletion({ task, title, content, configPath, fetchImpl }
   return { summary, provider: settings.displayName };
 }
 
+/** @param {string} projectRoot @param {{fetchImpl?: typeof fetch}} options @returns {import("vite").Plugin} */
 export default function createLocalLlmPlugin(
   projectRoot = process.cwd(),
   { fetchImpl = fetch } = {},

@@ -36,6 +36,8 @@ jobs:
         run: npm test
       - name: Build static site
         run: npm run build:github
+      - name: Verify exported articles and feeds
+        run: npm run test:export
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:

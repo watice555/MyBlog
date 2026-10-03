@@ -1,26 +1,23 @@
 import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/source-serif-4/wght.css";
 import "@fontsource-variable/source-serif-4/wght-italic.css";
-import "katex/dist/katex.min.css";
 import "./globals.css";
+import { absoluteUrl, siteDescription, siteTitle, siteUrl } from "../lib/site";
 
 const repository = process.env.GITHUB_REPOSITORY?.split("/")[1] ?? "";
-const owner = process.env.GITHUB_REPOSITORY_OWNER ?? "";
 const isUserSite = repository.endsWith(".github.io");
 const publicBasePath = process.env.GITHUB_ACTIONS && repository && !isUserSite
   ? `/${repository}`
   : "";
-const productionUrl = owner
-  ? `https://${owner}.github.io${isUserSite ? "" : `/${repository}`}`
-  : "http://localhost:3000";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? productionUrl),
+  metadataBase: new URL(siteUrl),
   title: {
-    default: "凝泠｜watice’s blog",
+    default: siteTitle,
     template: "%s｜凝泠",
   },
-  description: "关于金融、科技与时代变化的独立评论。记录事实，拆解叙事，在噪声里寻找清晰判断。",
+  description: siteDescription,
+  alternates: { canonical: absoluteUrl(), types: { "application/rss+xml": absoluteUrl("feed.xml") } },
   icons: {
     icon: `${publicBasePath}/favicon.svg`,
     shortcut: `${publicBasePath}/favicon.svg`,
@@ -30,13 +27,14 @@ export const metadata: Metadata = {
     description: "关于金融、科技与时代变化的独立评论。",
     type: "website",
     locale: "zh_CN",
-    images: [{ url: `${publicBasePath}/og.png`, width: 1200, height: 630, alt: "凝泠 watice’s blog" }],
+    url: absoluteUrl(),
+    images: [{ url: absoluteUrl("og.png"), width: 1200, height: 630, alt: "凝泠 watice’s blog" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "凝泠｜在噪声里辨认真实",
     description: "关于金融、科技与时代变化的独立评论。",
-    images: [`${publicBasePath}/og.png`],
+    images: [absoluteUrl("og.png")],
   },
 };
 
