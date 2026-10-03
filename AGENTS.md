@@ -49,6 +49,8 @@ Use disposable files for API tests. Never point destructive validation at unrela
 
 ## Commit & Delivery Workflow
 
+Keep `IMPLEMENTATION_LOG.md` in reverse chronological order (newest local timestamp first). Add new stage entries at the top, below the document heading; preserve existing entry text and timestamps when reordering.
+
 Work directly on `main` unless the user explicitly requests a separate branch or pull request. After a cohesive change is complete and validated, review `git status --short`, stage only files that belong to the task, create a concise imperative commit, and push `main` to `origin`. Preserve unrelated user edits, never force-push, and safely integrate upstream changes if the remote has advanced.
 
 Pushing `main` triggers the GitHub Pages workflow. Before pushing changes that affect published output, ensure the static export succeeds and call out any skipped or blocked validation in the handoff.

@@ -123,7 +123,7 @@ export default function LocalWorkspace() {
                 <button className="secondary-button" type="button" onClick={saveToDraftBox} disabled={savingDraft || savingMarkdown}>
                   {savingDraft ? "正在保存草稿…" : draft.draftId ? "存回草稿箱" : "保存到草稿箱"}
                 </button>
-                <button className="primary-button" type="button" onClick={saveMarkdownToProject} disabled={savingMarkdown}>
+                <button className="primary-button" type="button" onClick={saveMarkdownToProject} disabled={savingMarkdown || savingDraft}>
                   {savingMarkdown ? "构建、提交并推送中…" : draft.articleId ? "正式保存修改" : "正式保存并发布"}
                 </button>
               </div>

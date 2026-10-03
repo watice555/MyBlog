@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type SetStateAction } from "react";
 import { normalizeSlug, countWords } from "../../lib/content-utils.mjs";
 import { localEditorAvailable, subscribeToEditorEnvironment, routeFromHash, type View } from "../../lib/navigation";
 
@@ -155,7 +155,7 @@ export function useLocalEditor() {
   const [view, setView] = useState<View>({ name: "home" });
   const [projectArticles, setProjectArticles] = useState<Article[]>([]);
   const [draftArticles, setDraftArticles] = useState<DraftArticle[]>([]);
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [draft, setDraftState] = useState<Draft>(emptyDraft);
   const [toast, setToast] = useState("");
   const [summarizing, setSummarizing] = useState(false);
   const [proofreading, setProofreading] = useState(false);
@@ -172,6 +172,8 @@ export function useLocalEditor() {
   const markdownTextareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const draftRef = useRef<Draft>(draft);
+  const editorSessionRef = useRef(0);
+  const draftSaveInFlightRef = useRef(false);
   const autosaveBaselineRef = useRef(draftSignature(emptyDraft));
   const lastAutosavedSignatureRef = useRef("");
   const autosaveInFlightRef = useRef<Promise<void> | null>(null);
@@ -190,6 +192,13 @@ export function useLocalEditor() {
   );
 
   const articles = projectArticles;
+
+  // Async responses must see input immediately, including before React's next effect.
+  const setDraft = useCallback((update: SetStateAction<Draft>) => {
+    const nextDraft = typeof update === "function" ? update(draftRef.current) : update;
+    draftRef.current = nextDraft;
+    setDraftState(nextDraft);
+  }, []);
 
   const refreshProjectArticles = useCallback(async () => {
     const response = await fetch("/api/local-post", { cache: "no-store" });
@@ -211,6 +220,7 @@ export function useLocalEditor() {
   }, []);
 
   const loadDraftIntoEditor = useCallback((nextDraft: Draft) => {
+    editorSessionRef.current += 1;
     const signature = draftSignature(nextDraft);
     draftRef.current = nextDraft;
     autosaveBaselineRef.current = signature;
@@ -218,7 +228,7 @@ export function useLocalEditor() {
     setDraft(nextDraft);
     setAutosaveFailed(false);
     setAutosaveNotice("每 10 秒自动保存临时文件");
-  }, []);
+  }, [setDraft]);
 
   const checkRecoveryFile = useCallback(async () => {
     autosavePausedRef.current = true;
@@ -288,10 +298,6 @@ export function useLocalEditor() {
       if (autosaveInFlightRef.current === request) autosaveInFlightRef.current = null;
     });
   }, []);
-
-  useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
 
   useEffect(() => {
     const syncRoute = () => setView(routeFromHash());
@@ -396,9 +402,12 @@ export function useLocalEditor() {
   };
 
   const editSavedDraft = async (savedDraft: DraftArticle) => {
+    if (draftRef.current.draftId === savedDraft.id) {
+      window.location.assign(`#editor/draft/${encodeURIComponent(savedDraft.id)}`);
+      return;
+    }
     const hasOtherDraft = Boolean(
-      draft.draftId !== savedDraft.id &&
-      (draft.title.trim() || draft.excerpt.trim() || draft.content.trim()),
+      draftRef.current.title.trim() || draftRef.current.excerpt.trim() || draftRef.current.content.trim(),
     );
     if (hasOtherDraft && !window.confirm("打开这份草稿会替换当前编辑内容，是否继续？")) return;
     if (hasOtherDraft && !await clearRecoveryBeforeReplacement()) return;
@@ -565,13 +574,18 @@ export function useLocalEditor() {
   };
 
   const saveToDraftBox = async () => {
+    if (draftSaveInFlightRef.current || savingMarkdown) return;
     const targetDraft = draftRef.current;
+    const targetSignature = draftSignature(targetDraft);
+    const targetSession = editorSessionRef.current;
+    const targetHash = window.location.hash;
     const slug = normalizeSlug(targetDraft.draftId || targetDraft.articleId || targetDraft.slug || targetDraft.title);
     if (!slug) {
       notify("请先填写标题或有效的 slug");
       return;
     }
 
+    draftSaveInFlightRef.current = true;
     autosavePausedRef.current = true;
     setSavingDraft(true);
     try {
@@ -597,27 +611,59 @@ export function useLocalEditor() {
       if (!response.ok || !result.filename || !result.draft) {
         throw new Error(result.error || "草稿保存失败");
       }
-      loadDraftIntoEditor(draftFromDraftArticle(result.draft));
-      await refreshDraftArticles();
-      let cleanupWarning = "";
-      try {
-        await deleteRecoveryFile();
-      } catch (error) {
-        cleanupWarning = error instanceof Error ? error.message : "临时文件清理失败";
+      const savedDraft = draftFromDraftArticle(result.draft);
+      if (editorSessionRef.current !== targetSession) {
+        notify(`已保存到草稿箱：${result.filename}；当前编辑内容未替换`);
+        await refreshDraftArticles();
+        return;
       }
+
+      // Only the submitted snapshot is saved. Newer input remains dirty, with
+      // the returned identity so the next save overwrites the same draft.
+      const changedDuringSave = draftSignature(draftRef.current) !== targetSignature;
+      setDraft(changedDuringSave ? {
+        ...draftRef.current,
+        draftId: savedDraft.draftId,
+        articleId: savedDraft.articleId,
+        originalDate: savedDraft.originalDate,
+        slug: savedDraft.slug,
+      } : savedDraft);
+      autosaveBaselineRef.current = draftSignature(savedDraft);
+      lastAutosavedSignatureRef.current = "";
+      if (window.location.hash === targetHash) {
+        window.location.assign(`#editor/draft/${encodeURIComponent(result.draft.id)}`);
+      }
+      let cleanupWarning = "";
+      if (!changedDuringSave) {
+        try {
+          await deleteRecoveryFile();
+        } catch (error) {
+          cleanupWarning = error instanceof Error ? error.message : "临时文件清理失败";
+        }
+      }
+      await refreshDraftArticles();
+      if (editorSessionRef.current !== targetSession) return;
+      const hasNewerInput = draftSignature(draftRef.current) !== autosaveBaselineRef.current;
       notify(cleanupWarning
         ? `草稿已保存，但${cleanupWarning}`
-        : `已保存到草稿箱：${result.filename}`);
-      window.location.assign(`#editor/draft/${encodeURIComponent(result.draft.id)}`);
+        : hasNewerInput
+          ? "草稿已保存；后续修改已保留，尚未存回草稿箱"
+          : `已保存到草稿箱：${result.filename}`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "草稿保存失败");
     } finally {
-      autosavePausedRef.current = false;
+      draftSaveInFlightRef.current = false;
+      if (editorSessionRef.current === targetSession) {
+        autosavePausedRef.current = false;
+        // This also protects edits made while DELETE/refresh was pending.
+        writeRecoveryFile(draftRef.current);
+      }
       setSavingDraft(false);
     }
   };
 
   const saveMarkdownToProject = async () => {
+    if (draftSaveInFlightRef.current) return;
     const targetDraft = draftRef.current;
     if (!targetDraft.title.trim() || !targetDraft.content.trim()) {
       notify("正式发布前请写下标题和正文");
