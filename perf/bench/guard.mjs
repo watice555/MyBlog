@@ -7,7 +7,7 @@ const [directoryA, directoryB = directoryA] = process.argv.slice(2);
 if (!directoryA) throw new Error("Usage: node perf/bench/guard.mjs DIRECTORY_A [DIRECTORY_B]");
 const servers = [await serve(directoryA), await serve(directoryB)];
 const browser = await chromium.launch();
-const routes = ["/MyBlog/", "/MyBlog/article/2026-10-04-合并日报/", "/MyBlog/article/扒开那个半仓港股qdii的底裤/"];
+const routes = ["/MyBlog/", "/MyBlog/article/2026-10-04-合并日报/", "/MyBlog/article/扒开那个半仓港股qdii的底裤/", "/MyBlog/#archive", "/MyBlog/#about"];
 await mkdir(".local/perf/screenshots", { recursive: true });
 try {
   for (const width of [1440, 390]) {
@@ -23,7 +23,7 @@ try {
           await page.evaluate(() => document.fonts.ready);
           const golden = await page.evaluate(() => ({
             content: document.querySelector(".site-shell").outerHTML,
-            seo: [...document.querySelectorAll('title, meta[name], meta[property], link[rel="canonical"], link[rel="alternate"], script[type="application/ld+json"]')].map((element) => element.outerHTML),
+            seo: [...document.querySelectorAll('title, meta[name], meta[property], link[rel="canonical"], link[rel="alternate"], script[type="application/ld+json"]')].map((element) => element.outerHTML).sort(),
             overflow: document.documentElement.scrollWidth > innerWidth,
           }));
           assert.deepEqual(errors, [], `console errors: ${route}`);

@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* The index only uses digits; other characters fall back to the full serif. */
+@font-face {
+  font-family: "Ningling Index Serif";
+  font-style: italic;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url("./fonts/index-digits.woff2") format("woff2");
+  unicode-range: U+0020, U+0030-0039;
+}
+
 :root {
   --paper: #f5f3ec;
   --paper-deep: #ebe9df;
@@ -308,7 +318,7 @@ textarea:focus-visible {
 
 .article-index {
   color: var(--muted);
-  font-family: var(--serif);
+  font-family: "Ningling Index Serif", var(--serif);
   font-size: 12px;
   font-style: italic;
 }

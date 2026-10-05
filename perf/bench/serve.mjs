@@ -4,13 +4,27 @@ import { resolve, sep, extname } from "node:path";
 import { gzipSync } from "node:zlib";
 
 // Serve the exported site with the same compression on both sides of a pair.
-export async function serve(directory) {
+export async function serve(directory, { editorFixture = false } = {}) {
   const root = resolve(directory);
   const cache = new Map();
   const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".png": "image/png" };
   const server = createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
+      // Benchmark only: isolated empty editor API, never writes to the repository.
+      if (editorFixture && pathname.startsWith("/api/")) {
+        let fixture;
+        if (req.method === "GET" && pathname === "/api/local-post") fixture = { articles: [] };
+        if (req.method === "GET" && pathname === "/api/local-draft") fixture = { drafts: [] };
+        if (req.method === "GET" && pathname === "/api/local-recovery") fixture = { recovery: null };
+        if (req.method === "PUT" && pathname === "/api/local-recovery") {
+          for await (const chunk of req) { void chunk; }
+          fixture = { recovery: { savedAt: "2026-10-06T00:00:00Z" } };
+        }
+        res.writeHead(fixture ? 200 : 405, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify(fixture || { error: "Not available in benchmark" }));
+        return;
+      }
       let file = resolve(root, `.${pathname}`);
       if (!file.startsWith(root + sep)) throw new Error("Invalid path");
       if ((await stat(file)).isDirectory()) file = resolve(file, "index.html");

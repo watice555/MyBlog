@@ -1,5 +1,7 @@
 {
   "stylesheets": 2,
-  "cssGzip": 13000,
-  "jsGzip": 151000
+  "cssGzip": 12700,
+  "jsGzip": 151000,
+  "metadataGzip": 10935,
+  "indexFontBytes": 6500
 }

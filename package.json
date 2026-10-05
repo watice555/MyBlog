@@ -17,7 +17,10 @@
     "build:github": "next build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/*.test.mjs",
-    "test:export": "node --experimental-strip-types --test tests/static-export.check.mjs",
+    "test:export": "node --experimental-strip-types --test tests/static-export.check.mjs && npm run perf:budget",
+    "perf:budget": "node perf/bench/budget.mjs",
+    "perf:measure": "node perf/bench/measure.mjs",
+    "perf:guard": "node perf/bench/guard.mjs",
     "typecheck:local": "tsc -p tsconfig.local.json",
     "prelint": "npm run content:generate",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next && npm run typecheck:local"
