@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-10-07-合并日报",
+    "title": "2026-10-07 合并日报",
+    "excerpt": "本文汇总了2026年10月7日市场动态：美债收益率新高引发风险资产承压，BTC跌破8.4万美元；AI算力资本开支爆发，AMD收购World Labs；加密监管趋严，OKX完成融资；A股节后预期谨慎，关注存储板块及美联储纪要影响。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.10.07",
+    "dateISO": "2026-10-07",
+    "wordCount": 5827,
+    "readTime": "15 分钟"
+  },
+  {
     "id": "2026-10-06-合并日报",
     "title": "2026-10-06 合并日报",
     "excerpt": "本文梳理了AI产业竞争转向成本效率、加密监管框架明确及全球高利率下的资产分化。重点涵盖BTC震荡与机构吸筹、OKX融资、以太坊升级，以及Mistral发布万亿参数模型、巨头削减Claude依赖等科技动态，并提示关注美债收益率与AI巨头IPO进展。",
