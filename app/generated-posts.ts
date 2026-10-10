@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-10-10-合并日报",
+    "title": "2026-10-10 合并日报",
+    "excerpt": "日报聚焦硬件钱包信任危机、PaperTrade流动性争议及AI智能体竞争，涵盖BTC反弹、监管动态、传统资产表现及套利机会，并提示后续需跟踪的关键风险点。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.10.10",
+    "dateISO": "2026-10-10",
+    "wordCount": 4847,
+    "readTime": "13 分钟"
+  },
+  {
     "id": "2026-10-09-合并日报",
     "title": "2026-10-09 合并日报",
     "excerpt": "OpenAI营收修正引发全球资产共振下跌，加密市场爆仓超11亿美元，美联储鹰派预期升温。A股科技板块波动后现风格切换，链上安全事件频发，AI巨头动态及苹果供应链调整成为焦点。",
