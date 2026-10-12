@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "拉兰古墨文明简史-节选",
+    "title": "《拉兰古墨文明简史》节选",
+    "excerpt": "",
+    "category": "微科幻",
+    "aiParticipation": 1,
+    "date": "2026.10.12",
+    "dateISO": "2026-10-12",
+    "wordCount": 1195,
+    "readTime": "3 分钟"
+  },
+  {
     "id": "2026-10-12-合并日报",
     "title": "2026-10-12 合并日报",
     "excerpt": "地缘冲突推升能源价格，AI巨头竞逐具身智能与长上下文，Ledger供应链安全危机爆发。A股红利策略占优，加密市场震荡且ETF流出，传统金融风险事件密集，宏观通胀预期升温。",
