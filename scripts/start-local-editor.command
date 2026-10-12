@@ -70,7 +70,7 @@ echo "正在启动凝泠本地编辑器…"
 echo "关闭此终端窗口或按 Control-C 即可停止服务。"
 echo
 
-npm run dev -- --port "$PORT" --hostname localhost &
+npm run dev -- --port "$PORT" --host localhost --strictPort &
 server_pid=$!
 
 cleanup() {
@@ -91,11 +91,11 @@ for attempt in {1..90}; do
 
   if ! kill -0 "$server_pid" >/dev/null 2>&1; then
     wait "$server_pid"
-    status=$?
+    server_exit_code=$?
     echo
-    echo "本地服务启动失败（退出码：${status}）。"
+    echo "本地服务启动失败（退出码：${server_exit_code}）。"
     pause_on_error
-    exit "$status"
+    exit "$server_exit_code"
   fi
 
   sleep 1

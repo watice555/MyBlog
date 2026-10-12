@@ -1,5 +1,12 @@
 # 实施记录
 
+## 2026-10-13 05:11:07 Asia/Shanghai — 修复本地编辑器启动失败
+
+- 阶段总结：将启动脚本中已被 Vinext 移除的 --hostname 改为 --host localhost，并启用 --strictPort，避免端口变化后探测错误地址；将 zsh 只读变量 status 改为 server_exit_code，恢复启动失败提示和原始退出码。同步本机监听断言，并增加真实 zsh 失败分支回归测试。
+- 已执行的验证：zsh 语法检查；模拟服务退出 23 的回归测试；npm run lint（含严格本地插件类型检查）；npm test 37/37；实际 npm run edit:local 成功启动 localhost:3000 并执行自动打开浏览器；Playwright 确认编辑器“正式保存并发布”按钮可见；git diff --check。仅修改本地启动器和测试，不影响公开静态输出，未重复静态导出验证。
+- 写入者模型：GPT-6
+- 设备：TianhaodeMacBook-Pro（macOS 27.0.1，arm64）
+
 ## 2026-10-06 00:42:19 Asia/Shanghai — 补核官方性能数据接口
 
 - 阶段总结：发布后复核发现 huashu-flash 的示例 PageSpeed API 路径与 Google 官方文档不同；改用官方 pagespeedonline 地址重试，得到 429 配额耗尽。补充基线与报告的准确原因，仍不把无法查询解释成站点没有真实用户样本；本地实验室结论不变。

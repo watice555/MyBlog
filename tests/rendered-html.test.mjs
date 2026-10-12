@@ -375,7 +375,7 @@ test("keeps author controls local and hides them from public readers", async () 
   assert.match(page, /window\.setInterval\(refreshWhenVisible, 2000\)/);
   assert.match(startScript, /PORT="\$\{PORT:-3000\}"/);
   assert.match(startScript, /BASE_URL="http:\/\/localhost:\$\{PORT\}"/);
-  assert.match(startScript, /--hostname localhost/);
+  assert.match(startScript, /--host localhost --strictPort/);
   assert.match(readme, /npm run dev` 和 `npm run edit:local` 默认都使用 `http:\/\/localhost:3000`/);
 });
 
