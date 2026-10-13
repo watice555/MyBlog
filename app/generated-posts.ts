@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-10-13-合并日报",
+    "title": "2026-10-13 合并日报",
+    "excerpt": "本文汇总了宏观鹰派预期致全球风险资产承压、Ledger供应链安全危机、AI产业竞争加剧及传统金融加速链上化等核心动态，并梳理了加密市场波动、A股风格切换及各类套利机会，提示投资者关注后续CPI数据及关键风险点。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.10.13",
+    "dateISO": "2026-10-13",
+    "wordCount": 5327,
+    "readTime": "14 分钟"
+  },
+  {
     "id": "拉兰古墨文明简史-节选",
     "title": "《拉兰古墨文明简史》节选",
     "excerpt": "",
