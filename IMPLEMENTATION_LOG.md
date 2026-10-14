@@ -1,5 +1,15 @@
 # 实施记录
 
+## 2026-10-14 12:44:26 Asia/Shanghai — 保存 Qwen3.8 Flash Next 上下文测试笔记草稿
+
+- 阶段总结：按用户“先这样，整理测试笔记存到 myblog”的要求，新增本地 Markdown 草稿《Qwen3.8 Flash Next 在 M5 Max 上的上下文与 MTP 测试笔记》。整理中文、英文和意大利文三种语料的 48 个正式档位，记录硬件、模型、输入和计时口径、MTP 接受情况、内存、复现参数及原始记录位置；明确只控制了 KV 前缀复用与预热流程，没有统一系统文件页或 SSD n-gram 缓存状态，不能将单轮 prefill 差异归因于 MTP。
+- 保存位置：项目本地草稿箱，slug 为 qwen38-flash-next-m5-max-context-benchmark，分类为“科技笔记”。草稿遵循现有忽略规则，不纳入 Git；本阶段仅定向提交实施记录，保持本次保存笔记的本地范围。
+- 已执行的验证：逐项核对 24 行结果中的 144 个测量值及 24 个提升百分比，与 ds4 的两份原始 summary.csv 一致；使用项目 Front Matter 解析及日期、slug、AI 参与度验证；React Markdown 与 GFM 服务端渲染出 3 张表、24 行数据；检查正文未包含绝对个人路径，缓存局限已写入；git check-ignore 确认草稿被忽略，git diff --check 通过。
+- 验证范围：本次只整理和保存文稿，没有运行新的推理实验。没有改动应用、公开文章或生成模块，因此未执行应用全量测试、静态构建或部署验证。
+- 本地时间戳：2026-10-14 12:44:26 Asia/Shanghai
+- 写入者模型：GPT-6（运行环境未暴露具体变体）
+- 设备：TianhaodeMacBook-Pro（macOS 27.0.1，arm64）
+
 ## 2026-10-13 05:11:07 Asia/Shanghai — 修复本地编辑器启动失败
 
 - 阶段总结：将启动脚本中已被 Vinext 移除的 --hostname 改为 --host localhost，并启用 --strictPort，避免端口变化后探测错误地址；将 zsh 只读变量 status 改为 server_exit_code，恢复启动失败提示和原始退出码。同步本机监听断言，并增加真实 zsh 失败分支回归测试。
