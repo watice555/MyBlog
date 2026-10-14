@@ -1,11 +1,12 @@
 ---
 slug: "minimax-h3-本地部署和使用"
-title: "在 Mac 上用 h3.c 部署和使用 MiniMax-H3"
 date: "2026-08-12"
 category: "科技笔记"
 aiParticipation: 4
 excerpt: "从零下载、编译并使用 antirez 的 h3.c，在 Apple Silicon Mac 上运行 MiniMax-H3 官方模型并生成带声音视频。"
 ---
+
+# 在 Mac 上用 h3.c 部署和使用 MiniMax-H3
 
 # 从零开始：在 Mac 上用 h3.c 运行 MiniMax-H3
 

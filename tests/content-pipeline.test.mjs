@@ -7,10 +7,38 @@ import test from "node:test";
 import createLocalPostsPlugin from "../build/local-posts-plugin.mjs";
 import { normalizeDate } from "../lib/content-utils.mjs";
 import { parseFrontMatter } from "../lib/front-matter.mjs";
+import { parseMarkdownTitle, setMarkdownTitle } from "../lib/markdown-title.mjs";
 import { generatePosts } from "../scripts/generate-posts.mjs";
 
 const outputPaths = ["app/generated-posts.ts", "app/generated-post-content.ts", "public/search-index.json"];
-const article = (slug, date = "2026-10-02", body = "正文ＡＢＣ", extra = "") => `---\ntitle: ${slug}\nslug: ${slug}\ndate: ${date}\naiParticipation: 1\n${extra}---\n${body}\n`;
+const article = (slug, date = "2026-10-02", body = "正文ＡＢＣ", extra = "", withTitle = true) => `---\nslug: ${slug}\ndate: ${date}\naiParticipation: 1\n${extra}---\n${withTitle ? `# ${slug}\n\n` : ""}${body}\n`;
+
+test("article titles come from the first real ATX H1 and preserve the remaining Markdown", () => {
+  const prefix = "```md\n# code example\n```\n\n> # quoted title\n\n- # list title\n\nSetext title\n============\n\n";
+  const heading = "# **真实** [标题](https://example.com) `代码` ###";
+  const suffix = "\n\n正文  \n\n# 后续章节\n\n保留。\n";
+  const parsed = parseMarkdownTitle(prefix + heading + suffix);
+  assert.equal(parsed.title, "真实 标题 代码");
+  assert.equal(parsed.body, prefix + suffix);
+  assert.equal(parseMarkdownTitle(prefix).title, "");
+  assert.equal(parseMarkdownTitle("#\n\n# 第二个标题").title, "");
+  assert.equal(parseMarkdownTitle("  # CRLF 标题 ###\r\n\r\n正文").title, "CRLF 标题");
+  assert.equal(parseMarkdownTitle(setMarkdownTitle("正文", "带 *星号* 与 # 字符")).title, "带 *星号* 与 # 字符");
+  assert.equal(parseMarkdownTitle(setMarkdownTitle("# 原标题\n\n正文", "新标题")).body, "\n\n正文");
+});
+
+test("generation uses H1 over stale front matter while keeping an existing slug", async (t) => {
+  const root = await fixture(t);
+  const source = article("stable-link", "2026-10-02", "正文", "title: 过期标题\n").replace("# stable-link", "# 新标题");
+  await writeFile(join(root, "content/posts/first.md"), source);
+  const [post] = await generatePosts(root);
+  assert.equal(post.title, "新标题");
+  assert.equal(post.id, "stable-link");
+  assert.equal(post.wordCount, 2);
+  const bodies = await readFile(join(root, "app/generated-post-content.ts"), "utf8");
+  assert.ok(bodies.includes('"stable-link": "正文"'));
+  assert.ok(!bodies.includes("# 新标题"));
+});
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), "blog-content-pipeline-"));
@@ -66,7 +94,7 @@ test("generator validates the entire collection before replacing existing output
   for (const [markdown, message] of [
     [article("first", "2026-02-31"), /有效日期/],
     [article("first", "2026-10-02", ""), /正文不能为空/],
-    [article("first").replace("title: first", "title: ''"), /缺少 title/],
+    [article("first", "2026-10-02", "正文", "", false), /缺少非空一级标题/],
     [article("first").replace("aiParticipation: 1", "aiParticipation: 6"), /aiParticipation/],
   ]) {
     await writeFile(source, markdown);
@@ -132,11 +160,12 @@ test("failed push marks the source draft without parsing or changing its Markdow
   ];
   for (const [index, body] of bodies.entries()) {
     const slug = `draft-body-${index}`;
-    const markdown = article(slug, "2026-10-03", body).slice(0, -1);
+    const markdownBody = `${body}\n\n# ${slug}`;
+    const markdown = article(slug, "2026-10-03", markdownBody, "", false).slice(0, -1);
     const saved = await request(middleware, "/api/local-draft", { slug, markdown });
     assert.equal(saved.status, 200);
     const original = parseFrontMatter(markdown, `${slug}.md`);
-    assert.equal(original.content, body);
+    assert.equal(original.content, markdownBody);
 
     const result = await request(middleware, "/api/local-post", { slug, markdown, sourceDraftSlug: slug });
     assert.equal(result.status, 502);

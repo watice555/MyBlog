@@ -3,14 +3,9 @@ import { dirname, extname, join, parse, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { calculateReadTime, countWords, normalizeDate, normalizeSlug, normalizeAiParticipation, normalizeSearchText } from "../lib/content-utils.mjs";
 import { parseFrontMatter } from "../lib/front-matter.mjs";
+import { parseMarkdownTitle } from "../lib/markdown-title.mjs";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
-
-function requiredText(value, field, filename) {
-  const text = String(value ?? "").trim();
-  if (!text) throw new Error(`${filename}: Front Matter 缺少 ${field}`);
-  return text;
-}
 
 /** Generate in an explicit root so tests can use disposable article collections.
  * @param {string} root */
@@ -30,7 +25,9 @@ export async function generatePosts(root = projectRoot) {
   for (const filename of filenames) {
     const source = await readFile(join(postsDirectory, filename), "utf8");
     const { data, content } = parseFrontMatter(source, filename);
-    const body = content.trim();
+    const { title, body: markdownBody } = parseMarkdownTitle(content);
+    if (!title) throw new Error(`${filename}: Markdown 缺少非空一级标题（# xxx）`);
+    const body = markdownBody.trim();
     if (!body) throw new Error(`${filename}: 正文不能为空`);
 
     const slug = normalizeSlug(data.slug || parse(filename).name);
@@ -44,7 +41,7 @@ export async function generatePosts(root = projectRoot) {
     const excerpt = String(data.excerpt ?? "").trim();
     posts.push({
       id: slug,
-      title: requiredText(data.title, "title", filename),
+      title,
       excerpt,
       category: String(data.category ?? "评论").trim() || "评论",
       aiParticipation: normalizeAiParticipation(data.aiParticipation, filename),

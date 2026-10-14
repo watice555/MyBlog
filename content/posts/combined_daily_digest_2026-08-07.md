@@ -1,6 +1,5 @@
 ---
 slug: "2026-08-07-合并日报"
-title: "2026-08-07 合并日报"
 date: "2026-08-07"
 category: "日报"
 aiParticipation: 5

@@ -1,6 +1,5 @@
 ---
 slug: "qwen38-flash-next-m5-max-context-benchmark"
-title: "DwarfStar 本机测速：M5 Max 上的 Qwen3.8 Flash Next Q4"
 date: "2026-10-14"
 category: "科技笔记"
 aiParticipation: 4

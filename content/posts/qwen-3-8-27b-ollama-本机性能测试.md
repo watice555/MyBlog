@@ -1,6 +1,5 @@
 ---
 slug: "qwen-3-8-27b-ollama-本机性能测试"
-title: "Qwen 3.8 27B 在 Ollama 上的本机性能测试"
 date: "2026-08-19"
 category: "科技笔记"
 aiParticipation: 4

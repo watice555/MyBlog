@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import yaml from "js-yaml";
 import { calculateReadTime, countWords, normalizeDate, normalizeSlug, normalizeAiParticipation } from "../lib/content-utils.mjs";
 import { parseFrontMatter } from "../lib/front-matter.mjs";
+import { parseMarkdownTitle, setMarkdownTitle } from "../lib/markdown-title.mjs";
 
 const execFileAsync = promisify(execFile);
 const postRoute = "/api/local-post";
@@ -198,10 +199,10 @@ function parseArticle(markdown, filename, expectedSlug) {
     throw new Error("Markdown 中的 slug 与文件名不一致");
   }
 
-  const title = String(data.title ?? "").trim();
-  if (!title) throw new Error(`${filename}: Markdown 缺少标题`);
+  const { title, body: markdownBody } = parseMarkdownTitle(content);
+  if (!title) throw new Error(`${filename}: Markdown 缺少非空一级标题（# xxx）`);
   const rawDate = articleDate(data, filename);
-  const body = content.trim();
+  const body = markdownBody.trim();
   if (!body) throw new Error(`${filename}: Markdown 正文不能为空`);
 
   const aiParticipation = normalizeAiParticipation(data.aiParticipation, filename);
@@ -216,7 +217,7 @@ function parseArticle(markdown, filename, expectedSlug) {
     dateISO: rawDate,
     wordCount: countWords(body),
     readTime: calculateReadTime(body),
-    content: body,
+    content: content.trim(),
   };
 }
 
@@ -233,19 +234,23 @@ function parseDraft(markdown, filename, expectedSlug) {
     ? rawAiParticipation
     : 1;
   const sourceArticleId = normalizeSlug(data.sourceArticle);
-  const body = content.trim();
+  // Keep old local drafts readable; their next save migrates the legacy title.
+  const rawTitle = parseMarkdownTitle(content).title;
+  const legacyTitle = String(data.title ?? "").trim();
+  const draftMarkdown = !rawTitle && legacyTitle ? setMarkdownTitle(content, legacyTitle) : content;
+  const { title, body } = parseMarkdownTitle(draftMarkdown);
 
   return {
     id,
-    title: String(data.title ?? "").trim(),
+    title,
     excerpt: String(data.excerpt ?? "").trim(),
     category: String(data.category ?? "评论").trim() || "评论",
     aiParticipation,
     date: rawDate.replaceAll("-", "."),
     dateISO: rawDate,
-    wordCount: countWords(body),
-    readTime: calculateReadTime(body),
-    content: body,
+    wordCount: countWords(body.trim()),
+    readTime: calculateReadTime(body.trim()),
+    content: draftMarkdown.trim(),
     ...(sourceArticleId ? { sourceArticleId } : {}),
   };
 }
@@ -281,16 +286,20 @@ function normalizeRecoveryDraft(input) {
     throw new Error("临时文件中的 aiParticipation 必须是 1 到 5 之间的整数");
   }
 
+  const rawContent = String(value.content ?? "");
+  const legacyTitle = String(value.title ?? "").trim();
+  const content = !parseMarkdownTitle(rawContent).title && legacyTitle
+    ? setMarkdownTitle(rawContent, legacyTitle) : rawContent;
   return {
     ...(articleId ? { articleId } : {}),
     ...(draftId ? { draftId } : {}),
     ...(originalDate ? { originalDate } : {}),
     slug,
-    title: String(value.title ?? ""),
+    title: parseMarkdownTitle(content).title,
     excerpt: String(value.excerpt ?? ""),
     category: String(value.category ?? "评论"),
     aiParticipation,
-    content: String(value.content ?? ""),
+    content,
   };
 }
 

@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
 import { parseFrontMatter } from "../lib/front-matter.mjs";
+import { parseMarkdownTitle } from "../lib/markdown-title.mjs";
 import createLocalLlmPlugin from "../build/local-llm-plugin.mjs";
 import createLocalPostsPlugin from "../build/local-posts-plugin.mjs";
 import { generatePosts } from "../scripts/generate-posts.mjs";
@@ -55,12 +56,13 @@ async function createLocalApiFixture(testContext, options = {}) {
   await mkdir(scriptsDirectory, { recursive: true });
   await writeFile(resolve(postsDirectory, "fixture.md"), `---
 slug: "fixture"
-title: "Fixture"
 date: "2026-08-06"
 category: "评论"
 aiParticipation: 1
 excerpt: ""
 ---
+
+# Fixture
 
 Fixture body.
 `, "utf8");
@@ -296,7 +298,7 @@ test("renders GFM tables and mathematical formulas with responsive styles", asyn
   assert.doesNotMatch(page, /rehypeRaw|rehype-raw/);
   assert.match(page, /className="table-scroll"/);
   assert.match(page, /content:\s*""/);
-  assert.match(page, /placeholder="从这里开始写下今天的想法……"/);
+  assert.match(page, /# 文章标题\\n\\n从这里开始写下今天的想法……/);
   assert.match(page, /placeholder="用一小段话介绍这篇文章（可选）"/);
   assert.match(page, /className="title-input"[\s\S]*?placeholder="给这篇文章一个名字"[\s\S]*?rows=\{2\}/);
   assert.match(page, /className="editor-meta-side"[\s\S]*?placeholder="评论"[\s\S]*?<AiParticipationSlider/);
@@ -351,9 +353,10 @@ test("supports editing and updating existing articles", async () => {
   assert.doesNotMatch(page, /AI · \$\{label\}/);
   assert.match(page, /draft\.articleId \? "正式保存修改" : "正式保存并发布"/);
   assert.match(page, /onClick=\{saveMarkdownToProject\}/);
-  assert.match(page, /normalizeSlug\(draft\.title\) !== normalizeSlug\(draft\.slug\)/);
-  assert.match(page, /标题与 Slug 不同：文章列表将显示标题，链接将继续使用此 Slug。/);
-  assert.match(styles, /\.editor-meta \.slug-hint\s*\{/);
+  assert.match(page, /normalizeSlug\(markdownTitle\) !== normalizeSlug\(draft\.slug\)/);
+  assert.match(page, /Slug 与一级标题不同：文章列表将显示一级标题，链接将继续使用此 Slug。/);
+  assert.match(page, /Markdown 缺少一级标题（# xxx）/);
+  assert.match(styles, /\.editor-meta \.slug-hint,/);
 });
 
 test("keeps author controls local and hides them from public readers", async () => {
@@ -482,7 +485,7 @@ test("shows the project index beside the about introduction", async () => {
   assert.match(styles, /@media \(max-width:\s*680px\)\s*\{[\s\S]*?\.about-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
 });
 
-test("generates the article list from Markdown Front Matter", async () => {
+test("generates article titles from Markdown H1 and other metadata from Front Matter", async () => {
   const [page, packageJson, generator, generated, localPostsPlugin, filenames] = await Promise.all([
     readUiSource(),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -498,7 +501,8 @@ test("generates the article list from Markdown Front Matter", async () => {
     const source = await readFile(new URL(`../content/posts/${filename}`, import.meta.url), "utf8");
     const { data, content } = parseFrontMatter(source, filename);
     assert.ok(data.slug);
-    assert.ok(data.title);
+    assert.equal(data.title, undefined);
+    assert.ok(parseMarkdownTitle(content).title);
     assert.match(String(data.date instanceof Date ? data.date.toISOString().slice(0, 10) : data.date), /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(Number.isInteger(data.aiParticipation));
     assert.ok(data.aiParticipation >= 1 && data.aiParticipation <= 5);
@@ -576,12 +580,13 @@ test("rejects dangerous front matter, cross-port origins, and non-JSON writes on
   });
   const safeMarkdown = `---
 slug: "safe-note"
-title: "正常草稿"
 date: "2026-08-12"
 category: "评论"
 aiParticipation: 1
 excerpt: ""
 ---
+
+# 正常草稿
 
 正常正文。
 `;
@@ -666,12 +671,13 @@ test("keeps local article reads and generated content synchronized with Markdown
 
   await writeFile(postPath, `---
 slug: "fixture"
-title: "Updated on disk"
 date: "2026-08-06"
 category: "评论"
 aiParticipation: 3
 excerpt: ""
 ---
+
+# Updated on disk
 
 Updated body.
 `, "utf8");
@@ -680,7 +686,7 @@ Updated body.
   assert.equal(second.status, 200);
   assert.equal(second.body.articles[0].title, "Updated on disk");
   assert.equal(second.body.articles[0].aiParticipation, 3);
-  assert.equal(second.body.articles[0].content, "Updated body.");
+  assert.equal(second.body.articles[0].content, "# Updated on disk\n\nUpdated body.");
   assert.equal(await readFile(marker, "utf8"), "2");
 
   await requestLocalPosts(middleware);
@@ -697,12 +703,13 @@ test("stores ignored Markdown drafts without publishing them", async (testContex
   });
   const markdown = `---
 slug: "unfinished-note"
-title: "还没写完"
 date: "2026-08-12"
 category: "评论"
 aiParticipation: 2
 excerpt: ""
 ---
+
+# 还没写完
 
 草稿正文。
 `;
@@ -724,6 +731,30 @@ excerpt: ""
   assert.equal((await requestLocalPosts(middleware)).body.articles.length, 1);
 });
 
+test("allows incomplete drafts but rejects publishing without a real H1", async (testContext) => {
+  let publishCalls = 0;
+  const { middleware } = await createLocalApiFixture(testContext, {
+    publishPost: async () => { publishCalls++; return { commit: "fixture", pushed: true }; },
+  });
+  const markdown = '---\nslug: "missing-heading"\ndate: "2026-10-14"\naiParticipation: 1\n---\n\n```md\n# 示例标题\n```\n\n正文。\n';
+  const draft = await requestLocalJson(middleware, "/api/local-draft", {
+    method: "POST", input: { slug: "missing-heading", markdown },
+  });
+  assert.equal(draft.status, 200);
+  assert.equal(draft.body.draft.title, "");
+  const post = await requestLocalJson(middleware, "/api/local-post", {
+    method: "POST", input: { slug: "missing-heading", markdown },
+  });
+  assert.equal(post.status, 400);
+  assert.match(post.body.error, /一级标题/);
+  assert.equal(publishCalls, 0);
+  const legacy = await requestLocalJson(middleware, "/api/local-draft", {
+    method: "POST", input: { slug: "missing-heading", overwrite: true, markdown: markdown.replace('date:', 'title: "旧草稿标题"\ndate:') },
+  });
+  assert.equal(legacy.body.draft.title, "旧草稿标题");
+  assert.match(legacy.body.draft.content, /^# 旧草稿标题/);
+});
+
 test("atomically stores one editor recovery file until the user resolves it", async (testContext) => {
   const { middleware, projectRoot } = await createLocalApiFixture(testContext);
   const recoveryPath = resolve(
@@ -739,7 +770,7 @@ test("atomically stores one editor recovery file until the user resolves it", as
     excerpt: "",
     category: "评论",
     aiParticipation: 2,
-    content: "这段正文必须能够恢复。",
+    content: "# 还没来得及保存\n\n这段正文必须能够恢复。",
   };
 
   const empty = await requestLocalJson(middleware, "/api/local-recovery");
@@ -768,7 +799,7 @@ test("atomically stores one editor recovery file until the user resolves it", as
 
   const replaced = await requestLocalJson(middleware, "/api/local-recovery", {
     method: "PUT",
-    input: { draft: { ...recoveryDraft, content: "十秒后的新内容。" } },
+    input: { draft: { ...recoveryDraft, title: "", content: "十秒后的新内容。" } },
   });
   assert.equal(replaced.status, 200);
   assert.equal((await requestLocalJson(middleware, "/api/local-recovery")).body.recovery.draft.content, "十秒后的新内容。");
@@ -804,12 +835,13 @@ test("publishes a draft and only removes it after a successful push", async (tes
   });
   const markdown = `---
 slug: "ready-note"
-title: "准备发布"
 date: "2026-08-12"
 category: "科技"
 aiParticipation: 3
 excerpt: "摘要"
 ---
+
+# 准备发布
 
 正式正文。
 `;
@@ -838,12 +870,13 @@ test("keeps a source draft when publishing fails and rolls back pre-commit failu
   });
   const markdown = `---
 slug: "retry-note"
-title: "稍后重试"
 date: "2026-08-12"
 category: "评论"
 aiParticipation: 1
 excerpt: ""
 ---
+
+# 稍后重试
 
 需要保留的正文。
 `;

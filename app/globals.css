@@ -1286,11 +1286,11 @@ textarea:focus-visible {
   opacity: 0.58;
 }
 
-.editor-meta .slug-hint {
-  color: var(--muted);
-  font-size: 10px;
+.editor-meta .slug-hint,
+.editor-meta .title-warning {
+  color: #985322;
+  font-size: 11px;
   line-height: 1.55;
-  opacity: 0.82;
 }
 
 .editor-meta-side {

@@ -8,7 +8,7 @@ export const generatedPosts = [
     "aiParticipation": 4,
     "date": "2026.10.14",
     "dateISO": "2026-10-14",
-    "wordCount": 6686,
+    "wordCount": 6646,
     "readTime": "17 分钟"
   },
   {
@@ -624,7 +624,7 @@ export const generatedPosts = [
     "aiParticipation": 4,
     "date": "2026.08.19",
     "dateISO": "2026-08-19",
-    "wordCount": 2953,
+    "wordCount": 2927,
     "readTime": "8 分钟"
   },
   {
@@ -767,7 +767,7 @@ export const generatedPosts = [
     "aiParticipation": 5,
     "date": "2026.08.07",
     "dateISO": "2026-08-07",
-    "wordCount": 4157,
+    "wordCount": 4142,
     "readTime": "11 分钟"
   },
   {
@@ -811,7 +811,7 @@ export const generatedPosts = [
     "aiParticipation": 5,
     "date": "2026.08.06",
     "dateISO": "2026-08-06",
-    "wordCount": 5082,
+    "wordCount": 5067,
     "readTime": "13 分钟"
   },
   {
@@ -822,7 +822,7 @@ export const generatedPosts = [
     "aiParticipation": 5,
     "date": "2026.08.05",
     "dateISO": "2026-08-05",
-    "wordCount": 3939,
+    "wordCount": 3924,
     "readTime": "10 分钟"
   },
   {
@@ -833,7 +833,7 @@ export const generatedPosts = [
     "aiParticipation": 5,
     "date": "2026.08.04",
     "dateISO": "2026-08-04",
-    "wordCount": 4263,
+    "wordCount": 4248,
     "readTime": "11 分钟"
   },
   {
@@ -844,7 +844,7 @@ export const generatedPosts = [
     "aiParticipation": 5,
     "date": "2026.08.03",
     "dateISO": "2026-08-03",
-    "wordCount": 4789,
+    "wordCount": 4774,
     "readTime": "12 分钟"
   },
   {
@@ -855,7 +855,7 @@ export const generatedPosts = [
     "aiParticipation": 5,
     "date": "2026.08.01",
     "dateISO": "2026-08-01",
-    "wordCount": 4292,
+    "wordCount": 4277,
     "readTime": "11 分钟"
   }
 ] as const;

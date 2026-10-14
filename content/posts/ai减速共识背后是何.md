@@ -1,11 +1,12 @@
 ---
 slug: "ai减速共识背后是何"
-title: "AI减速共识背后是何"
 date: "2026-09-13"
 category: "评论"
 aiParticipation: 1
 excerpt: ""
 ---
+
+# AI减速共识背后是何
 
 > Anthropic CEO Dario Amodei发表长文呼吁放缓前沿AI发展，OpenAI CEO Sam Altman及Elon Musk均公开表示支持。
 

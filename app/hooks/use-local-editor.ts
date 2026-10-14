@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type SetStateAction } from "react";
 import { normalizeSlug, countWords } from "../../lib/content-utils.mjs";
+import { parseMarkdownTitle, setMarkdownTitle } from "../../lib/markdown-title.mjs";
 import { localEditorAvailable, subscribeToEditorEnvironment, routeFromHash, type View } from "../../lib/navigation";
 
 export type AiParticipationLevel = 1 | 2 | 3 | 4 | 5;
@@ -180,10 +181,12 @@ export function useLocalEditor() {
   const autosavePausedRef = useRef(false);
   const previousViewNameRef = useRef<View["name"]>("home");
   const localAiEnabled = process.env.NODE_ENV === "development";
+  const { title: markdownTitle, body: previewContent } = parseMarkdownTitle(draft.content);
+  const missingMarkdownTitle = !markdownTitle;
   const slugDiffersFromTitle = Boolean(
-    draft.title.trim() &&
+    markdownTitle &&
     draft.slug.trim() &&
-    normalizeSlug(draft.title) !== normalizeSlug(draft.slug),
+    normalizeSlug(markdownTitle) !== normalizeSlug(draft.slug),
   );
   const editorEnabled = useSyncExternalStore(
     subscribeToEditorEnvironment,
@@ -195,7 +198,16 @@ export function useLocalEditor() {
 
   // Async responses must see input immediately, including before React's next effect.
   const setDraft = useCallback((update: SetStateAction<Draft>) => {
-    const nextDraft = typeof update === "function" ? update(draftRef.current) : update;
+    const updated = typeof update === "function" ? update(draftRef.current) : update;
+    const titleFieldChanged = updated.content === draftRef.current.content && updated.title !== draftRef.current.title;
+    const content = titleFieldChanged ? setMarkdownTitle(updated.content, updated.title) : updated.content;
+    const nextDraft = {
+      ...updated,
+      content,
+      // Preserve spaces while typing in the title field. Markdown is the
+      // persisted authority, and body edits always refresh this display value.
+      title: titleFieldChanged ? updated.title.replace(/[\r\n]+/g, " ") : parseMarkdownTitle(content).title,
+    };
     draftRef.current = nextDraft;
     setDraftState(nextDraft);
   }, []);
@@ -220,6 +232,7 @@ export function useLocalEditor() {
   }, []);
 
   const loadDraftIntoEditor = useCallback((nextDraft: Draft) => {
+    nextDraft = { ...nextDraft, title: parseMarkdownTitle(nextDraft.content).title };
     editorSessionRef.current += 1;
     const signature = draftSignature(nextDraft);
     draftRef.current = nextDraft;
@@ -558,7 +571,6 @@ export function useLocalEditor() {
     return [
       "---",
       `slug: ${JSON.stringify(slug)}`,
-      `title: ${JSON.stringify(targetDraft.title.trim())}`,
       `date: ${JSON.stringify(date)}`,
       `category: ${JSON.stringify(targetDraft.category.trim() || "评论")}`,
       `aiParticipation: ${targetDraft.aiParticipation}`,
@@ -665,8 +677,9 @@ export function useLocalEditor() {
   const saveMarkdownToProject = async () => {
     if (draftSaveInFlightRef.current) return;
     const targetDraft = draftRef.current;
-    if (!targetDraft.title.trim() || !targetDraft.content.trim()) {
-      notify("正式发布前请写下标题和正文");
+    const { title, body } = parseMarkdownTitle(targetDraft.content);
+    if (!title || !body.trim()) {
+      notify("正式发布前请在 Markdown 中写下一级标题（# xxx）和正文");
       return;
     }
 
@@ -779,8 +792,9 @@ export function useLocalEditor() {
   const saveRecoveryAsPost = async () => {
     if (!recovery) return;
     const targetDraft = recovery.draft;
-    if (!targetDraft.title.trim() || !targetDraft.content.trim()) {
-      setRecoveryError("这份临时文件缺少标题或正文，暂时不能保存为正文；请先存入草稿箱。");
+    const { title, body } = parseMarkdownTitle(targetDraft.content);
+    if (!title || !body.trim()) {
+      setRecoveryError("这份临时文件缺少一级标题（# xxx）或正文，暂时不能保存为正文；请先存入草稿箱。");
       return;
     }
     if (!window.confirm("确认把这份临时文件保存为正文？这会执行构建、Git 提交并推送到 main。")) return;
@@ -870,5 +884,5 @@ export function useLocalEditor() {
   };
 
 
-  return { view, draftArticles, draft, setDraft, toast, summarizing, proofreading, proofreadingSuggestions, setProofreadingSuggestions, savingMarkdown, savingDraft, uploadingImage, recovery, recoveryGateStatus, recoveryError, recoveryAction, autosaveNotice, autosaveFailed, markdownTextareaRef, imageInputRef, localAiEnabled, slugDiffersFromTitle, editorEnabled, checkRecoveryFile, editSavedDraft, startNewDraft, summarizeDraft, proofreadDraft, uploadImage, saveToDraftBox, saveMarkdownToProject, saveRecoveryAsDraft, saveRecoveryAsPost, discardRecovery };
+  return { view, draftArticles, draft, setDraft, previewContent, missingMarkdownTitle, toast, summarizing, proofreading, proofreadingSuggestions, setProofreadingSuggestions, savingMarkdown, savingDraft, uploadingImage, recovery, recoveryGateStatus, recoveryError, recoveryAction, autosaveNotice, autosaveFailed, markdownTextareaRef, imageInputRef, localAiEnabled, slugDiffersFromTitle, editorEnabled, checkRecoveryFile, editSavedDraft, startNewDraft, summarizeDraft, proofreadDraft, uploadImage, saveToDraftBox, saveMarkdownToProject, saveRecoveryAsDraft, saveRecoveryAsPost, discardRecovery };
 }

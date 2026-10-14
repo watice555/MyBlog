@@ -9,7 +9,7 @@ import { RecoveryDialog } from "./recovery-dialog";
 import "katex/dist/katex.min.css";
 
 export default function LocalWorkspace() {
-  const { view, draftArticles, draft, setDraft, toast, summarizing, proofreading, proofreadingSuggestions, setProofreadingSuggestions, savingMarkdown, savingDraft, uploadingImage, recovery, recoveryGateStatus, recoveryError, recoveryAction, autosaveNotice, autosaveFailed, markdownTextareaRef, imageInputRef, localAiEnabled, slugDiffersFromTitle, editorEnabled, checkRecoveryFile, editSavedDraft, startNewDraft, summarizeDraft, proofreadDraft, uploadImage, saveToDraftBox, saveMarkdownToProject, saveRecoveryAsDraft, saveRecoveryAsPost, discardRecovery } = useLocalEditor();
+  const { view, draftArticles, draft, setDraft, previewContent, missingMarkdownTitle, toast, summarizing, proofreading, proofreadingSuggestions, setProofreadingSuggestions, savingMarkdown, savingDraft, uploadingImage, recovery, recoveryGateStatus, recoveryError, recoveryAction, autosaveNotice, autosaveFailed, markdownTextareaRef, imageInputRef, localAiEnabled, slugDiffersFromTitle, editorEnabled, checkRecoveryFile, editSavedDraft, startNewDraft, summarizeDraft, proofreadDraft, uploadImage, saveToDraftBox, saveMarkdownToProject, saveRecoveryAsDraft, saveRecoveryAsPost, discardRecovery } = useLocalEditor();
   return <>
       {view.name === "editor" && editorEnabled && recoveryGateStatus !== "ready" && (
         <RecoveryDialog>
@@ -134,7 +134,7 @@ export default function LocalWorkspace() {
             </p>
             <div className="editor-meta">
               <label className="title-field">
-                <span>标题</span>
+                <span>标题（与正文第一个 # 标题同步）</span>
                 <textarea
                   className="title-input"
                   value={draft.title}
@@ -142,12 +142,15 @@ export default function LocalWorkspace() {
                   placeholder="给这篇文章一个名字"
                   rows={2}
                 />
+                {missingMarkdownTitle && (
+                  <small className="title-warning" role="status">Markdown 缺少一级标题（# xxx）：可以保存草稿，正式发布前请补上。</small>
+                )}
               </label>
               <label>
                 <span>Slug（文章地址）</span>
                 <input value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: normalizeSlug(event.target.value) })} placeholder="留空则根据标题生成" disabled={Boolean(draft.articleId || draft.draftId)} />
                 {slugDiffersFromTitle && (
-                  <small className="slug-hint">标题与 Slug 不同：文章列表将显示标题，链接将继续使用此 Slug。</small>
+                  <small className="slug-hint" role="status">Slug 与一级标题不同：文章列表将显示一级标题，链接将继续使用此 Slug。</small>
                 )}
               </label>
               <div className="editor-meta-side">
@@ -233,7 +236,7 @@ export default function LocalWorkspace() {
                     setDraft({ ...draft, content: event.target.value });
                     setProofreadingSuggestions("");
                   }}
-                  placeholder="从这里开始写下今天的想法……"
+                  placeholder={"# 文章标题\n\n从这里开始写下今天的想法……"}
                   aria-label="Markdown 正文"
                   spellCheck="true"
                 />
@@ -244,10 +247,10 @@ export default function LocalWorkspace() {
                   <p className="article-category">{draft.category || "未分类"}</p>
                   <h1>{draft.title || "未命名的文章"}</h1>
                   <div className="article-meta">
-                    <span>{draft.originalDate || formatDate(new Date())} · {formatWordCount(draft.content)} · {readTime(draft.content)}</span>
+                    <span>{draft.originalDate || formatDate(new Date())} · {formatWordCount(previewContent)} · {readTime(previewContent)}</span>
                     <AiParticipationIndicator value={draft.aiParticipation} variant="label" />
                   </div>
-                  <Markdown source={draft.content} />
+                  <Markdown source={previewContent} />
                 </article>
               </section>
             </div>

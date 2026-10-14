@@ -5,6 +5,7 @@ import vm from "node:vm";
 import test from "node:test";
 import ts from "typescript";
 import * as contentUtils from "../lib/content-utils.mjs";
+import * as markdownTitle from "../lib/markdown-title.mjs";
 
 const hookSource = await readFile(new URL("../app/hooks/use-local-editor.ts", import.meta.url), "utf8");
 const navigationSource = await readFile(new URL("../lib/navigation.ts", import.meta.url), "utf8");
@@ -21,7 +22,7 @@ function response(value, status = 200) {
 
 const article = {
   id: "draft-a", title: "原始标题", excerpt: "摘要", category: "评论",
-  aiParticipation: 1, date: "2026-10-03", readTime: "1 分钟", content: "已保存正文",
+  aiParticipation: 1, date: "2026-10-03", readTime: "1 分钟", content: "# 原始标题\n\n已保存正文",
 };
 
 // Execute the real hook callbacks/effects with deterministic hook slots, timers
@@ -117,7 +118,7 @@ function createEditor({ drafts = [], posts = [], hash = "#editor", request } = {
   }
   const navigation = evaluate(navigationSource);
   const { useLocalEditor } = evaluate(hookSource, {
-    react, "../../lib/content-utils.mjs": contentUtils, "../../lib/navigation": navigation,
+    react, "../../lib/content-utils.mjs": contentUtils, "../../lib/markdown-title.mjs": markdownTitle, "../../lib/navigation": navigation,
   });
   function render() {
     for (let attempts = 0; dirty; attempts++) {
@@ -152,13 +153,52 @@ function savedResponse(saved = article) {
   return response({ filename: `${saved.id}.md`, draft: saved });
 }
 
+test("editor warns on missing H1, synchronizes title input and retains published slugs", async () => {
+  const post = { ...article, id: "stable-url" };
+  const editor = createEditor({ posts: [post], hash: "#editor/stable-url" });
+  await editor.settle();
+  assert.equal(editor.current.slugDiffersFromTitle, true);
+  assert.equal(editor.current.missingMarkdownTitle, false);
+  assert.equal(editor.current.previewContent.trim(), "已保存正文");
+  editor.current.setDraft({ ...editor.current.draft, content: "# 更改标题\n\n正文" });
+  assert.equal(editor.current.draft.title, "更改标题");
+  assert.equal(editor.current.draft.slug, "stable-url");
+  editor.current.setDraft({ ...editor.current.draft, title: "带 空格" });
+  assert.equal(editor.current.draft.content, "# 带 空格\n\n正文");
+  editor.current.setDraft({ ...editor.current.draft, content: "```md\n# 只有示例\n```\n\n正文" });
+  assert.equal(editor.current.draft.title, "");
+  assert.equal(editor.current.missingMarkdownTitle, true);
+  await editor.current.saveMarkdownToProject();
+  assert.match(editor.current.toast, /一级标题/);
+  assert.equal(editor.calls.filter((call) => call.method === "POST").length, 0);
+});
+
+test("new draft derives and persists its slug once, including after title changes", async () => {
+  const saved = { ...article, id: "最初的标题", title: "最初的标题", content: "# 最初的标题\n\n正文" };
+  const editor = createEditor({ request: ({ method }) => method === "POST" ? savedResponse(saved) : undefined });
+  await editor.settle();
+  editor.current.setDraft({ ...editor.current.draft, title: "最初的 " });
+  assert.equal(editor.current.draft.title, "最初的 ");
+  editor.current.setDraft({ ...editor.current.draft, content: saved.content });
+  assert.equal(editor.current.slugDiffersFromTitle, false);
+  await editor.current.saveToDraftBox();
+  await editor.settle();
+  const sent = editor.calls.find((call) => call.method === "POST");
+  assert.equal(sent.body.slug, saved.id);
+  assert.ok(sent.body.markdown.includes("# 最初的标题"));
+  assert.ok(!sent.body.markdown.includes("\ntitle:"));
+  editor.current.setDraft({ ...editor.current.draft, content: "# 后来的标题\n\n正文" });
+  assert.equal(editor.current.draft.slug, saved.id);
+  assert.equal(editor.current.slugDiffersFromTitle, true);
+});
+
 test("draft save preserves typing before its delayed response, identity and recovery", async () => {
   const pending = deferred();
   const editor = createEditor({ request: ({ method, url }) => method === "POST" && url === "/api/local-draft" ? pending.promise : undefined });
   await editor.settle();
   editor.current.setDraft({ ...editor.current.draft, title: article.title, content: article.content });
   const save = editor.current.saveToDraftBox();
-  const newer = { ...editor.current.draft, title: "新标题", content: "保存后新输入", excerpt: "新摘要", category: "笔记", aiParticipation: 3 };
+  const newer = { ...editor.current.draft, title: "新标题", content: "# 新标题\n\n保存后新输入", excerpt: "新摘要", category: "笔记", aiParticipation: 3 };
   editor.current.setDraft(newer); // Intentionally no intervening render/effect.
   pending.resolve(savedResponse());
   await save;
@@ -268,7 +308,7 @@ test("duplicate saves and publishing cannot overlap an in-flight draft save", as
 
 test("saving an existing article as a draft does not reload the article after list refresh", async () => {
   const post = { ...article, id: "published-post" };
-  const saved = { ...article, id: post.id, sourceArticleId: post.id, content: "文章的新草稿" };
+  const saved = { ...article, id: post.id, sourceArticleId: post.id, content: "# 原始标题\n\n文章的新草稿" };
   const editor = createEditor({ posts: [post], hash: `#editor/${post.id}`, request: ({ method }) => method === "POST" ? savedResponse(saved) : undefined });
   await editor.settle();
   editor.current.setDraft({ ...editor.current.draft, content: saved.content });

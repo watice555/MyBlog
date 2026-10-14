@@ -1,12 +1,12 @@
 ---
 slug: "2026-09-04 合并日报"
-title: "2026-09-04 合并日报"
 date: "2026-09-04"
 category: "日报"
 aiParticipation: 5
 excerpt: "美国8月非农超预期推升加息预期，美股逆势上涨；OpenAI发布GPT-6逼近AGI，英伟达收购Hugging Face加速AI整合。加密市场比特币突破8.2万美元，但Robinhood Chain宕机及多起DeFi安全事件频发，凸显行业风险。"
 ---
 
+# 2026-09-04 合并日报
 
 ## 今日主线
 

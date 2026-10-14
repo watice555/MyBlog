@@ -1,12 +1,12 @@
 ---
 slug: "2026-09-11 合并日报"
-title: "2026-09-11 合并日报"
 date: "2026-09-11"
 category: "日报"
 aiParticipation: 5
 excerpt: "美国8月PPI超预期推升加息预期，美债收益率创新高，BTC跌破7.7万美元。AI领域OpenAI发布新模型，Anthropic指控中国实验室蒸馏Claude。A股科技股承压，燧原科技上市首日大涨。加密市场ETF净流出，ETH短线急拉。"
 ---
 
+# 2026-09-11 合并日报
 
 ## 今日主线
 
