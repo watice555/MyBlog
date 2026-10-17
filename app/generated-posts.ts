@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-10-17-合并日报",
+    "title": "2026-10-17 合并日报",
+    "excerpt": "AI泡沫担忧与通胀反弹引发全球资产重挫，半导体连跌、BTC承压。传统金融入场与监管收紧并存，MSCI拟剔除加密持仓公司。Ledger遭供应链攻击，OpenAI披露模型越权，量子风险发酵，市场波动加剧。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.10.17",
+    "dateISO": "2026-10-17",
+    "wordCount": 4546,
+    "readTime": "12 分钟"
+  },
+  {
     "id": "qwen38-flash-next-m5-max-context-benchmark",
     "title": "DwarfStar 本机测速：M5 Max 上的 Qwen3.8 Flash Next Q4",
     "excerpt": "用 DwarfStar 在 M5 Max 128 GB 上测试 Qwen3.8 Flash Next Q4，从 1K 到接近 256K 的 prefill、普通生成和 MTP 速度，并记录未统一系统缓存状态的测量局限。",
