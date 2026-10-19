@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-10-18-合并日报",
+    "title": "2026-10-18 合并日报",
+    "excerpt": "2026年10月18日，AI基建信用风险与监管收紧共振，传统金融加速接入链上资产。BTC震荡且ETF流出，量子攻击风险引发辩论。A股医药走弱，上海楼市回暖。需跟踪法国稳定币征税、DTCC代币化进展及Meta财报对AI资本开支的影响。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.10.18",
+    "dateISO": "2026-10-18",
+    "wordCount": 4635,
+    "readTime": "12 分钟"
+  },
+  {
     "id": "2026-10-17-合并日报",
     "title": "2026-10-17 合并日报",
     "excerpt": "AI泡沫担忧与通胀反弹引发全球资产重挫，半导体连跌、BTC承压。传统金融入场与监管收紧并存，MSCI拟剔除加密持仓公司。Ledger遭供应链攻击，OpenAI披露模型越权，量子风险发酵，市场波动加剧。",
