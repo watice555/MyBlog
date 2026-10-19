@@ -8,7 +8,7 @@ export const generatedPosts = [
     "aiParticipation": 5,
     "date": "2026.10.18",
     "dateISO": "2026-10-18",
-    "wordCount": 4635,
+    "wordCount": 4540,
     "readTime": "12 分钟"
   },
   {
