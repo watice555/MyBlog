@@ -156,14 +156,21 @@ export default function LocalWorkspace() {
                   <small className="title-warning" role="status">Markdown 缺少一级标题（# xxx）：可以保存草稿，正式发布前请补上。</small>
                 )}
               </label>
-              <label>
-                <span>Slug（文章地址）</span>
-                <input value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: normalizeSlug(event.target.value) })} placeholder="留空则根据标题生成" disabled={Boolean(draft.articleId || draft.draftId)} />
-                {slugDiffersFromTitle && (
-                  <small className="slug-hint" role="status">Slug 与一级标题不同：文章列表将显示一级标题，链接将继续使用此 Slug。</small>
-                )}
-              </label>
               <div className="editor-meta-side">
+                <label className="slug-field">
+                  <span>Slug（文章地址）</span>
+                  <textarea
+                    className="slug-input"
+                    value={draft.slug}
+                    onChange={(event) => setDraft({ ...draft, slug: normalizeSlug(event.target.value) })}
+                    placeholder="留空则根据标题生成"
+                    readOnly={Boolean(draft.articleId || draft.draftId)}
+                    rows={2}
+                  />
+                  {slugDiffersFromTitle && (
+                    <small className="slug-hint" role="status">Slug 与一级标题不同：文章列表将显示一级标题，链接将继续使用此 Slug。</small>
+                  )}
+                </label>
                 <label>
                   <span>日期</span>
                   <input type="date" value={draft.originalDate?.replaceAll(".", "-") || formatDate(new Date()).replaceAll(".", "-")} onChange={(event) => setDraft({ ...draft, originalDate: event.target.value })} />
