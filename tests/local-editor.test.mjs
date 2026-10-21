@@ -153,6 +153,46 @@ function savedResponse(saved = article) {
   return response({ filename: `${saved.id}.md`, draft: saved });
 }
 
+test("opens imported drafts and writes edited metadata without changing their body or identity", async () => {
+  const imported = { ...article, id: "imported-note", importNotice: "未检测到 YAML 文件头", filename: "Imported Note.md" };
+  const saved = { ...imported, date: "2026.10.13", category: "摘录", aiParticipation: 2, excerpt: "补充的摘要", importNotice: undefined };
+  const editor = createEditor({
+    drafts: [imported], hash: "#editor/draft/imported-note",
+    request: ({ url, method }) => url === "/api/local-draft" && method === "POST" ? savedResponse(saved) : undefined,
+  });
+  await editor.settle();
+  assert.equal(editor.current.draft.importNotice, imported.importNotice);
+  assert.equal(editor.current.draft.content, imported.content);
+  editor.current.setDraft({ ...editor.current.draft, originalDate: "2026-10-13", category: "摘录", aiParticipation: 2, excerpt: "补充的摘要" });
+  await editor.current.saveToDraftBox();
+  const { body } = editor.calls.find((call) => call.url === "/api/local-draft" && call.method === "POST");
+  assert.equal(body.slug, "imported-note");
+  assert.equal(body.overwrite, true);
+  assert.match(body.markdown, /date: "2026-10-13"/);
+  assert.match(body.markdown, /category: "摘录"/);
+  assert.match(body.markdown, /aiParticipation: 2/);
+  assert.match(body.markdown, /excerpt: "补充的摘要"/);
+  assert.ok(body.markdown.endsWith(`${imported.content}\n`));
+  assert.equal(editor.current.draft.importNotice, undefined);
+});
+
+test("exposes draft list file errors and service failures instead of silently showing an empty list", async () => {
+  const errors = [{ filename: "bad.md", error: "YAML 格式错误" }];
+  const editor = createEditor({
+    hash: "#drafts",
+    request: ({ url }) => url === "/api/local-draft" ? response({ drafts: [article], errors }) : undefined,
+  });
+  await editor.settle();
+  assert.equal(editor.current.draftArticles.length, 1);
+  assert.equal(editor.current.draftListErrors[0].filename, "bad.md");
+  const unavailable = createEditor({
+    hash: "#drafts",
+    request: ({ url }) => url === "/api/local-draft" ? response({ error: "草稿目录不可读" }, 500) : undefined,
+  });
+  await unavailable.settle();
+  assert.equal(unavailable.current.draftListError, "草稿目录不可读");
+});
+
 test("editor warns on missing H1, synchronizes title input and retains published slugs", async () => {
   const post = { ...article, id: "stable-url" };
   const editor = createEditor({ posts: [post], hash: "#editor/stable-url" });

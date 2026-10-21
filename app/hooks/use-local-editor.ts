@@ -30,6 +30,7 @@ type Draft = {
   category: string;
   aiParticipation: AiParticipationLevel;
   content: string;
+  importNotice?: string;
 };
 
 type LocalAiResponse = {
@@ -55,11 +56,14 @@ type PostListResponse = {
 
 type DraftArticle = Article & {
   sourceArticleId?: string;
+  filename?: string;
+  importNotice?: string;
 };
 
 type DraftListResponse = {
   drafts?: DraftArticle[];
   count?: number;
+  errors?: { filename: string; error: string }[];
   error?: string;
 };
 
@@ -148,6 +152,7 @@ function draftFromDraftArticle(article: DraftArticle): Draft {
     category: article.category,
     aiParticipation: article.aiParticipation,
     content: article.content,
+    ...(article.importNotice ? { importNotice: article.importNotice } : {}),
   };
 }
 
@@ -156,6 +161,8 @@ export function useLocalEditor() {
   const [view, setView] = useState<View>({ name: "home" });
   const [projectArticles, setProjectArticles] = useState<Article[]>([]);
   const [draftArticles, setDraftArticles] = useState<DraftArticle[]>([]);
+  const [draftListErrors, setDraftListErrors] = useState<{ filename: string; error: string }[]>([]);
+  const [draftListError, setDraftListError] = useState("");
   const [draft, setDraftState] = useState<Draft>(emptyDraft);
   const [toast, setToast] = useState("");
   const [summarizing, setSummarizing] = useState(false);
@@ -228,6 +235,8 @@ export function useLocalEditor() {
       throw new Error(result.error || "无法从 content/drafts 读取草稿");
     }
     setDraftArticles(result.drafts);
+    setDraftListErrors(result.errors || []);
+    setDraftListError("");
     return result;
   }, []);
 
@@ -326,8 +335,8 @@ export function useLocalEditor() {
         void refreshProjectArticles().catch(() => {
           // Keep the last valid file snapshot while an external edit is incomplete.
         });
-        void refreshDraftArticles().catch(() => {
-          // Keep the last valid draft snapshot while an external edit is incomplete.
+        void refreshDraftArticles().catch((error) => {
+          setDraftListError(error instanceof Error ? error.message : "草稿箱读取失败");
         });
       }
     };
@@ -884,5 +893,5 @@ export function useLocalEditor() {
   };
 
 
-  return { view, draftArticles, draft, setDraft, previewContent, missingMarkdownTitle, toast, summarizing, proofreading, proofreadingSuggestions, setProofreadingSuggestions, savingMarkdown, savingDraft, uploadingImage, recovery, recoveryGateStatus, recoveryError, recoveryAction, autosaveNotice, autosaveFailed, markdownTextareaRef, imageInputRef, localAiEnabled, slugDiffersFromTitle, editorEnabled, checkRecoveryFile, editSavedDraft, startNewDraft, summarizeDraft, proofreadDraft, uploadImage, saveToDraftBox, saveMarkdownToProject, saveRecoveryAsDraft, saveRecoveryAsPost, discardRecovery };
+  return { view, draftArticles, draftListErrors, draftListError, draft, setDraft, previewContent, missingMarkdownTitle, toast, summarizing, proofreading, proofreadingSuggestions, setProofreadingSuggestions, savingMarkdown, savingDraft, uploadingImage, recovery, recoveryGateStatus, recoveryError, recoveryAction, autosaveNotice, autosaveFailed, markdownTextareaRef, imageInputRef, localAiEnabled, slugDiffersFromTitle, editorEnabled, checkRecoveryFile, editSavedDraft, startNewDraft, summarizeDraft, proofreadDraft, uploadImage, saveToDraftBox, saveMarkdownToProject, saveRecoveryAsDraft, saveRecoveryAsPost, discardRecovery };
 }

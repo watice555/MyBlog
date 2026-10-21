@@ -755,6 +755,117 @@ test("allows incomplete drafts but rejects publishing without a real H1", async 
   assert.match(legacy.body.draft.content, /^# 旧草稿标题/);
 });
 
+test("imports plain Markdown drafts read-only and saves metadata back to the original filename", async (testContext) => {
+  const { middleware, projectRoot } = await createLocalApiFixture(testContext);
+  const directory = resolve(projectRoot, "content", "drafts");
+  await mkdir(directory, { recursive: true });
+  const filename = "外部 笔记（初稿）.MD";
+  const source = "\uFEFF# 外部笔记\r\n\r\n原始正文，保留标点。\r\n";
+  await writeFile(resolve(directory, filename), source);
+  await writeFile(resolve(directory, "invalid.md"), "---\ndate: [broken\n---\n\n# 损坏头部\n");
+  const listed = await requestLocalJson(middleware, "/api/local-draft");
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.count, 1);
+  const [draft] = listed.body.drafts;
+  assert.equal(draft.id, "外部-笔记-初稿");
+  assert.equal(draft.filename, filename);
+  assert.equal(draft.title, "外部笔记");
+  assert.equal(draft.content, source.replace(/^\uFEFF/, "").trim());
+  assert.match(draft.importNotice, /未检测到 YAML 文件头/);
+  assert.equal(listed.body.errors[0].filename, "invalid.md");
+  assert.equal(await readFile(resolve(directory, filename), "utf8"), source);
+  assert.equal((await requestLocalPosts(middleware)).body.articles.length, 1);
+
+  const markdown = `---\nslug: ${draft.id}\ndate: "2026-10-13"\ncategory: 读书\naiParticipation: 2\nexcerpt: 导入后补充\n---\n\n${draft.content}\n`;
+  const saved = await requestLocalJson(middleware, "/api/local-draft", {
+    method: "POST", input: { slug: draft.id, markdown, overwrite: true },
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.filename, filename);
+  assert.equal(saved.body.draft.dateISO, "2026-10-13");
+  assert.equal(saved.body.draft.category, "读书");
+  assert.equal(saved.body.draft.aiParticipation, 2);
+  assert.equal(saved.body.draft.excerpt, "导入后补充");
+  assert.equal(saved.body.draft.content, draft.content);
+  assert.equal(await readFile(resolve(directory, filename), "utf8"), markdown);
+  await assert.rejects(access(resolve(directory, `${draft.id}.md`)));
+  const reloaded = await requestLocalJson(middleware, "/api/local-draft");
+  assert.equal(reloaded.body.count, 1);
+  assert.equal(reloaded.body.drafts[0].importNotice, undefined);
+});
+
+test("reports invalid draft files individually and keeps imports separate from strict write validation", async (testContext) => {
+  const { middleware, projectRoot } = await createLocalApiFixture(testContext);
+  const directory = resolve(projectRoot, "content", "drafts");
+  await mkdir(directory, { recursive: true });
+  const canary = resolve(projectRoot, "executed.txt");
+  const dangerous = `---js\n({ title: require("fs").writeFileSync(${JSON.stringify(canary)}, "1") })\n---\n\n# 不执行\n`;
+  const sources = {
+    "partial.md": "\uFEFF---\ncategory: 摘录\n---\n\n# 字段不全\n\n保留正文。",
+    "untitled.md": "没有标题的未完成正文。",
+    "bad-date.md": "---\ndate: 2026-02-31\naiParticipation: 99\n---\n\n# 日期错误\n\n正文。",
+    "dangerous.md": dangerous,
+  };
+  for (const [filename, source] of Object.entries(sources)) await writeFile(resolve(directory, filename), source);
+  const listed = await requestLocalJson(middleware, "/api/local-draft");
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.count, 3);
+  const partial = listed.body.drafts.find((draft) => draft.id === "partial");
+  assert.equal(partial.category, "摘录");
+  assert.match(partial.importNotice, /文件头尚未补全/);
+  assert.equal(listed.body.drafts.find((draft) => draft.id === "untitled").title, "");
+  const invalidMetadata = listed.body.drafts.find((draft) => draft.id === "bad-date");
+  assert.match(invalidMetadata.importNotice, /2026-02-31.*无效/);
+  assert.match(invalidMetadata.importNotice, /AI 参与度无效/);
+  assert.equal(invalidMetadata.aiParticipation, 1);
+  assert.deepEqual(listed.body.errors.map((entry) => entry.filename), ["dangerous.md"]);
+  await assert.rejects(access(canary));
+  for (const [filename, source] of Object.entries(sources)) assert.equal(await readFile(resolve(directory, filename), "utf8"), source);
+  assert.equal((await requestLocalJson(middleware, "/api/local-draft", { origin: "http://localhost:9999" })).status, 403);
+  for (const route of ["/api/local-draft", "/api/local-post"]) {
+    const rejected = await requestLocalJson(middleware, route, {
+      method: "POST", input: { slug: "unvalidated", markdown: "# 没有文件头\n\n正文。" },
+    });
+    assert.equal(rejected.status, 400);
+    assert.match(rejected.body.error, /Front Matter/);
+    const invalidDate = await requestLocalJson(middleware, route, {
+      method: "POST", input: { slug: "unvalidated", markdown: sources["bad-date.md"] },
+    });
+    assert.equal(invalidDate.status, 400);
+    assert.match(invalidDate.body.error, /date 不是有效日期/);
+  }
+});
+
+test("publishes imported drafts with safe cleanup and retains their content when a push fails", async (testContext) => {
+  for (const pushed of [true, false]) {
+    const { middleware, projectRoot } = await createLocalApiFixture(testContext, {
+      publishPost: async () => ({ commit: "imported-commit", pushed, ...(pushed ? {} : { error: "推送失败" }) }),
+    });
+    const directory = resolve(projectRoot, "content", "drafts");
+    await mkdir(directory, { recursive: true });
+    const original = "# 外部文章\n\n导入的原始正文。\n";
+    const file = resolve(directory, "Imported Note.md");
+    await writeFile(file, original);
+    const result = await requestLocalJson(middleware, "/api/local-post", {
+      method: "POST",
+      input: {
+        slug: "imported-note", sourceDraftSlug: "imported-note",
+        markdown: `---\nslug: imported-note\ndate: 2026-10-13\naiParticipation: 1\n---\n\n${original}`,
+      },
+    });
+    assert.equal(result.status, pushed ? 200 : 502);
+    if (pushed) {
+      await assert.rejects(access(file));
+    } else {
+      const saved = parseFrontMatter(await readFile(file, "utf8"), "Imported Note.md");
+      assert.equal(saved.data.sourceArticle, "imported-note");
+      assert.equal(saved.content, original);
+      const reloaded = await requestLocalJson(middleware, "/api/local-draft");
+      assert.equal(reloaded.body.drafts[0].sourceArticleId, "imported-note");
+    }
+  }
+});
+
 test("atomically stores one editor recovery file until the user resolves it", async (testContext) => {
   const { middleware, projectRoot } = await createLocalApiFixture(testContext);
   const recoveryPath = resolve(

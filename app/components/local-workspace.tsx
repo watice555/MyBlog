@@ -6,10 +6,11 @@ import { useLocalEditor, formatDate, formatWordCount, formatRecoveryTime, type A
 import { Markdown } from "./markdown";
 import { PageIntro, AiParticipationIndicator, AI_PARTICIPATION_LABELS } from "./article-ui";
 import { RecoveryDialog } from "./recovery-dialog";
+import "./local-workspace.css";
 import "katex/dist/katex.min.css";
 
 export default function LocalWorkspace() {
-  const { view, draftArticles, draft, setDraft, previewContent, missingMarkdownTitle, toast, summarizing, proofreading, proofreadingSuggestions, setProofreadingSuggestions, savingMarkdown, savingDraft, uploadingImage, recovery, recoveryGateStatus, recoveryError, recoveryAction, autosaveNotice, autosaveFailed, markdownTextareaRef, imageInputRef, localAiEnabled, slugDiffersFromTitle, editorEnabled, checkRecoveryFile, editSavedDraft, startNewDraft, summarizeDraft, proofreadDraft, uploadImage, saveToDraftBox, saveMarkdownToProject, saveRecoveryAsDraft, saveRecoveryAsPost, discardRecovery } = useLocalEditor();
+  const { view, draftArticles, draftListErrors, draftListError, draft, setDraft, previewContent, missingMarkdownTitle, toast, summarizing, proofreading, proofreadingSuggestions, setProofreadingSuggestions, savingMarkdown, savingDraft, uploadingImage, recovery, recoveryGateStatus, recoveryError, recoveryAction, autosaveNotice, autosaveFailed, markdownTextareaRef, imageInputRef, localAiEnabled, slugDiffersFromTitle, editorEnabled, checkRecoveryFile, editSavedDraft, startNewDraft, summarizeDraft, proofreadDraft, uploadImage, saveToDraftBox, saveMarkdownToProject, saveRecoveryAsDraft, saveRecoveryAsPost, discardRecovery } = useLocalEditor();
   return <>
       {view.name === "editor" && editorEnabled && recoveryGateStatus !== "ready" && (
         <RecoveryDialog>
@@ -91,21 +92,29 @@ export default function LocalWorkspace() {
               <span>共 {draftArticles.length} 份本地草稿</span>
               <button className="primary-button" type="button" onClick={startNewDraft}>新建草稿</button>
             </div>
+            {draftListError && <p className="draft-import-warning" role="alert">{draftListError}</p>}
+            {draftListErrors.length > 0 && (
+              <div className="draft-import-warning" role="alert">
+                <p>以下文件暂时无法读取，请修正对应文件后重试：</p>
+                <ul>{draftListErrors.map((entry) => <li key={entry.filename}>{entry.filename}：{entry.error}</li>)}</ul>
+              </div>
+            )}
             <div className="draft-list">
               {draftArticles.map((savedDraft) => (
                 <article className="draft-card" key={savedDraft.id}>
                   <div>
                     <p>{savedDraft.sourceArticleId ? "正式文章的修改草稿" : "未发布草稿"} · {savedDraft.date}</p>
-                    <h2>{savedDraft.title || "未命名草稿"}</h2>
+                    <h2>{savedDraft.title || savedDraft.filename || "未命名草稿"}</h2>
                     <span>{savedDraft.category} · {formatWordCount(savedDraft.content)} · {savedDraft.readTime}</span>
+                    {savedDraft.importNotice && <p className="draft-import-label">待补全文件头 · 打开后可修改</p>}
                   </div>
                   <button type="button" onClick={() => editSavedDraft(savedDraft)}>打开编辑</button>
                 </article>
               ))}
             </div>
-            {draftArticles.length === 0 && (
+            {draftArticles.length === 0 && !draftListError && draftListErrors.length === 0 && (
               <div className="drafts-empty">
-                <p>草稿箱还是空的。编辑文章时点「存回草稿箱」，内容就会作为本地 Markdown 保存在这里。</p>
+                <p>草稿箱还是空的。可以直接把 Markdown 放进 content/drafts，也可以在编辑器中保存草稿；没有文件头也能打开。</p>
               </div>
             )}
           </section>
@@ -132,6 +141,7 @@ export default function LocalWorkspace() {
               草稿以 content/drafts 中的本地 Markdown 为准；正式保存会写入 content/posts，通过静态构建后提交并推送到 main。
               <span>{autosaveNotice}</span>
             </p>
+            {draft.importNotice && <p className="draft-import-warning" role="status">{draft.importNotice}</p>}
             <div className="editor-meta">
               <label className="title-field">
                 <span>标题（与正文第一个 # 标题同步）</span>
@@ -154,6 +164,10 @@ export default function LocalWorkspace() {
                 )}
               </label>
               <div className="editor-meta-side">
+                <label>
+                  <span>日期</span>
+                  <input type="date" value={draft.originalDate?.replaceAll(".", "-") || formatDate(new Date()).replaceAll(".", "-")} onChange={(event) => setDraft({ ...draft, originalDate: event.target.value })} />
+                </label>
                 <label>
                   <span>分类</span>
                   <input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="评论" />

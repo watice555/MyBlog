@@ -1242,6 +1242,7 @@ textarea:focus-visible {
 .editor-meta label {
   display: grid;
   min-width: 0;
+  align-content: start;
   gap: 8px;
 }
 

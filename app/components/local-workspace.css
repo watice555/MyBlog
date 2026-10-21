@@ -1,0 +1,24 @@
+.draft-import-warning {
+  margin: 0 0 24px;
+  padding: 14px 18px;
+  border-left: 3px solid var(--coral);
+  background: rgba(220, 230, 221, 0.3);
+  color: #985322;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.draft-import-warning p {
+  margin: 0;
+}
+
+.draft-import-warning ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.draft-card .draft-import-label {
+  margin: 8px 0 0;
+  color: #985322;
+}

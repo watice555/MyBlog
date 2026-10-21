@@ -255,6 +255,63 @@ function parseDraft(markdown, filename, expectedSlug) {
   };
 }
 
+/** Import local Markdown without weakening the YAML-only write API.
+ * @param {string} markdown @param {string} filename */
+function readDraft(markdown, filename) {
+  const source = markdown.replace(/^\uFEFF/, "");
+  if (/^---\r?\n/.test(source)) {
+    const { data, content } = parseFrontMatter(source, filename);
+    const incomplete = ["slug", "date", "category", "aiParticipation"].some((key) => data[key] == null || data[key] === "");
+    const notices = incomplete ? ["文件头尚未补全，可在编辑器上方修改，保存时会写入标准文件头。"] : [];
+    let draftSource = source;
+    try {
+      articleDate(data, filename, { draft: true });
+    } catch {
+      notices.push(`原日期「${String(data.date)}」无效，暂用今天的日期，请在上方确认或修改。`);
+      const metadata = { ...data, date: new Date().toISOString().slice(0, 10) };
+      draftSource = `---\n${yaml.dump(metadata, { schema: yaml.JSON_SCHEMA })}---\n${content}`;
+    }
+    const ai = Number(data.aiParticipation ?? 1);
+    if (!Number.isInteger(ai) || ai < 1 || ai > 5) notices.push("AI 参与度无效，暂用「纯人工」，请在上方确认或修改。");
+    const draft = parseDraft(draftSource, filename);
+    return { ...draft, ...(notices.length ? { importNotice: notices.join(" ") } : {}) };
+  }
+  // Never pass an engine delimiter such as ---js to gray-matter.
+  if (/^---\S/.test(source)) throw new Error(`${filename}: Front Matter 只接受普通 YAML 文件头`);
+  return {
+    ...parseDraft(`---\ncategory: 评论\n---\n${source}`, filename),
+    importNotice: "未检测到 YAML 文件头，可在编辑器上方补充日期、分类、AI 参与度和摘要，保存时会自动生成文件头。",
+  };
+}
+
+/** @param {string} directory */
+async function readDraftFiles(directory) {
+  await mkdir(directory, { recursive: true });
+  const entries = await readdir(directory, { withFileTypes: true });
+  const drafts = [];
+  const errors = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || extname(entry.name).toLowerCase() !== ".md") continue;
+    try {
+      const markdown = await readFile(resolve(directory, entry.name), "utf8");
+      drafts.push({ filename: entry.name, markdown, article: readDraft(markdown, entry.name) });
+    } catch (error) {
+      errors.push({ filename: entry.name, error: formatError(error, "草稿读取失败") });
+    }
+  }
+  return { drafts, errors };
+}
+
+/** @param {string} directory @param {string} slug */
+async function findDraft(directory, slug) {
+  const { drafts, errors } = await readDraftFiles(directory);
+  const invalidTarget = errors.find((entry) => normalizeSlug(parse(entry.filename).name) === slug);
+  if (invalidTarget) throw new Error(invalidTarget.error);
+  const matches = drafts.filter((entry) => entry.article.id === slug);
+  if (matches.length > 1) throw new Error("草稿箱中有多个文件使用相同 slug，请先修改文件名或文件头以消除冲突");
+  return matches[0];
+}
+
 /** @param {unknown} value @param {string} label */
 function normalizeRecoveryId(value, label) {
   const rawValue = String(value ?? "").trim();
@@ -300,6 +357,7 @@ function normalizeRecoveryDraft(input) {
     category: String(value.category ?? "评论"),
     aiParticipation,
     content,
+    ...(typeof value.importNotice === "string" ? { importNotice: value.importNotice } : {}),
   };
 }
 
@@ -366,7 +424,19 @@ async function atomicWrite(directory, filename, content) {
 
 /** @param {string} draftsDirectory @param {StoredArticle} sourceDraft @param {string} articleSlug */
 async function markDraftAsPublishedLocally(draftsDirectory, sourceDraft, articleSlug) {
-  const parsed = parseFrontMatter(sourceDraft.markdown, sourceDraft.filename);
+  const source = sourceDraft.markdown.replace(/^\uFEFF/, "");
+  const parsed = /^---\r?\n/.test(source)
+    ? parseFrontMatter(source, sourceDraft.filename)
+    : {
+      data: /** @type {Record<string, unknown>} */ ({
+        slug: sourceDraft.article.id,
+        date: sourceDraft.article.dateISO,
+        category: sourceDraft.article.category,
+        aiParticipation: sourceDraft.article.aiParticipation,
+        excerpt: sourceDraft.article.excerpt,
+      }),
+      content: source,
+    };
   parsed.data.sourceArticle = articleSlug;
   // gray-matter.stringify(string, data) parses the string again, so a body
   // beginning with ---js would execute its JavaScript engine. Serialize only
@@ -598,8 +668,10 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
         if (pathname === draftRoute) {
           if (request.method === "GET") {
             try {
-              const drafts = await listMarkdown(draftsDirectory, parseDraft);
-              sendJson(response, 200, { drafts, count: drafts.length });
+              const { drafts: files, errors } = await readDraftFiles(draftsDirectory);
+              const drafts = files.map((file) => ({ ...file.article, filename: file.filename }))
+                .sort((left, right) => right.date.localeCompare(left.date) || left.title.localeCompare(right.title, "zh-CN"));
+              sendJson(response, 200, { drafts, count: drafts.length, errors });
             } catch (error) {
               sendJson(response, 500, { error: formatError(error, "草稿箱读取失败") });
             }
@@ -619,7 +691,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
             }
             const draft = parseDraft(markdown, `${slug}.md`, slug);
             await mkdir(draftsDirectory, { recursive: true });
-            const existingDraft = await findMarkdown(draftsDirectory, slug, parseDraft);
+            const existingDraft = await findDraft(draftsDirectory, slug);
             if (existingDraft && !input.overwrite) {
               sendJson(response, 409, {
                 error: "草稿箱中已有相同 slug 的草稿，未执行覆盖",
@@ -708,7 +780,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
           if (!publishResult.pushed) {
             const sourceDraftSlug = normalizeSlug(input.sourceDraftSlug);
             if (sourceDraftSlug && sourceDraftSlug === input.sourceDraftSlug) {
-              const sourceDraft = await findMarkdown(draftsDirectory, sourceDraftSlug, parseDraft).catch(() => undefined);
+              const sourceDraft = await findDraft(draftsDirectory, sourceDraftSlug).catch(() => undefined);
               if (sourceDraft) {
                 await markDraftAsPublishedLocally(draftsDirectory, sourceDraft, slug).catch(() => {});
               }
@@ -725,7 +797,7 @@ export default function createLocalPostsPlugin(projectRoot = process.cwd(), opti
 
           const sourceDraftSlug = normalizeSlug(input.sourceDraftSlug);
           if (sourceDraftSlug && sourceDraftSlug === input.sourceDraftSlug) {
-            const sourceDraft = await findMarkdown(draftsDirectory, sourceDraftSlug, parseDraft).catch(() => undefined);
+            const sourceDraft = await findDraft(draftsDirectory, sourceDraftSlug).catch(() => undefined);
             if (sourceDraft) await unlink(resolve(draftsDirectory, sourceDraft.filename)).catch(() => {});
           }
           sendJson(response, 200, {
