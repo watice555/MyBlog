@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-10-26-合并日报",
+    "title": "2026-10-26 合并日报",
+    "excerpt": "本文汇总2026年10月26日市场动态，聚焦AI巨头资本化与算力紧缺、地缘政治风险及加密市场资金分化。涵盖A股情绪修复、DeFi安全事件及撸毛套利机会，并提示需持续跟踪Anthropic IPO、美伊局势及BTC关键位支撑等核心变量。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.10.26",
+    "dateISO": "2026-10-26",
+    "wordCount": 4257,
+    "readTime": "11 分钟"
+  },
+  {
     "id": "nanbeige43-33b-mlx-8bit-m5-max-context-benchmark",
     "title": "Nanbeige4.3-33B MLX 8bit 测速：M5 Max 上的 8K–128K 上下文",
     "excerpt": "本文记录 Nanbeige4.3-33B MLX 8bit 在 M5 Max 128 GB 上从 8K 到 128K 的输入处理、生成速度与内存占用，并说明语料、计时口径和单轮短输出测试的局限。",
