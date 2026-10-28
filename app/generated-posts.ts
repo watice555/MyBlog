@@ -3,12 +3,12 @@ export const generatedPosts = [
   {
     "id": "2026-10-26-合并日报",
     "title": "2026-10-26 合并日报",
-    "excerpt": "本文汇总2026年10月26日市场动态，聚焦AI巨头资本化与算力紧缺、地缘政治风险及加密市场资金分化。涵盖A股情绪修复、DeFi安全事件及撸毛套利机会，并提示需持续跟踪Anthropic IPO、美伊局势及BTC关键位支撑等核心变量。",
+    "excerpt": "2026年10月26日，AI巨头加速资本化，Anthropic申请IPO且算力紧缺；巴西大选致资产暴跌，BTC跌破8万美元且散户抛压显著；A股情绪修复但反弹存疑，DeFi安全事件频发，需关注Anthropic上市及BTC支撑位。",
     "category": "日报",
     "aiParticipation": 5,
     "date": "2026.10.26",
     "dateISO": "2026-10-26",
-    "wordCount": 4257,
+    "wordCount": 4378,
     "readTime": "11 分钟"
   },
   {
