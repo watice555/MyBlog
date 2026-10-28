@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-10-27-合并日报",
+    "title": "2026-10-27 合并日报",
+    "excerpt": "2026年10月27日，AI巨头资本开支分化，Anthropic递交IPO招股书，Meta启动巨额融资。A股宽基指数创纪录下跌但ETF逆势吸金，BTC跌破8万美元引发避险情绪。OpenAI发布新模型并降价，微软优化成本，市场关注美联储议息及AI科研突破验证。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.10.27",
+    "dateISO": "2026-10-27",
+    "wordCount": 4042,
+    "readTime": "11 分钟"
+  },
+  {
     "id": "2026-10-26-合并日报",
     "title": "2026-10-26 合并日报",
     "excerpt": "2026年10月26日，AI巨头加速资本化，Anthropic申请IPO且算力紧缺；巴西大选致资产暴跌，BTC跌破8万美元且散户抛压显著；A股情绪修复但反弹存疑，DeFi安全事件频发，需关注Anthropic上市及BTC支撑位。",
