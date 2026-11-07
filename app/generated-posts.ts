@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-11-07-合并日报",
+    "title": "2026-11-07 合并日报",
+    "excerpt": "MEXC遭FinCEN制裁致提现受阻，AI板块波动引发BTC剧烈震荡，Anthropic估值下调。央行强化RWA监管并增持黄金，Web3Auth漏洞波及钱包安全，OpenAI完成融资，市场避险情绪升温。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.11.07",
+    "dateISO": "2026-11-07",
+    "wordCount": 4424,
+    "readTime": "12 分钟"
+  },
+  {
     "id": "2026-11-05-合并日报",
     "title": "2026-11-05 合并日报",
     "excerpt": "2026年11月5日，美国中期选举变局引发市场重估，费城半导体指数大跌，特朗普关联资产暴跌。BTC反弹但ETF资金流出，Polygon拟硬分叉回收被盗资产引发共识争议。传统金融代币化加速，AI监管与算力管制收紧，A股放量反弹，需警惕交易所稳定性及链上安全风险。",
