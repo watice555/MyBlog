@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-11-08-合并日报",
+    "title": "2026-11-08 合并日报",
+    "excerpt": "2026年11月8日，加密行业面临FinCEN监管重压与多起安全事件，BTC跌破7.6万美元且ETF大幅流出。美股科技股暴跌引发AI泡沫担忧，中国开源模型主导全球企业支出但面临监管收紧。A股港股反弹，纳指ETF溢价高企，传统资产波动加剧，需警惕合规风险与市场回调。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.11.08",
+    "dateISO": "2026-11-08",
+    "wordCount": 3904,
+    "readTime": "10 分钟"
+  },
+  {
     "id": "2026-11-07-合并日报",
     "title": "2026-11-07 合并日报",
     "excerpt": "MEXC遭FinCEN制裁致提现受阻，AI板块波动引发BTC剧烈震荡，Anthropic估值下调。央行强化RWA监管并增持黄金，Web3Auth漏洞波及钱包安全，OpenAI完成融资，市场避险情绪升温。",
