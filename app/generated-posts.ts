@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-11-14-合并日报",
+    "title": "2026-11-14 合并日报",
+    "excerpt": "2026年11月14日，宏观紧缩预期压制风险资产，BTC跌破关键支撑。英伟达CEO辞职引发估值重估，Anthropic IPO受地缘限制。链上DeFi风险暴露，Kava协议异常致暴跌。AI产业进入重资本阶段，A股小市值策略承压，需关注后续财报及政策动态。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.11.14",
+    "dateISO": "2026-11-14",
+    "wordCount": 3904,
+    "readTime": "10 分钟"
+  },
+  {
     "id": "2026-11-13-合并日报",
     "title": "2026-11-13 合并日报",
     "excerpt": "英伟达CEO辞任引发市场震荡，BTC跌破6.8万美元。美司法部冻结币安被盗资产，AI巨头融资密集。美国通胀推升加息预期，中国金融数据不及预期。DTCC拟接入Solana，多起安全事件频发，需关注后续监管与资产流向。",
