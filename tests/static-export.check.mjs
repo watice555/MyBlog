@@ -47,7 +47,11 @@ test("ships discoverable RSS, sitemap, robots and a complete separate search ind
   assert.match(home, /application\/rss\+xml/);
   assert.match(home, /id="recent"/);
   assert.doesNotMatch(home, /本地布局预览|首页布局对比/);
-  for (const post of generatedPosts.slice(0, 5)) {
+  const homepagePosts = [
+    generatedPosts.find((post) => post.category === "日报"),
+    ...generatedPosts.filter((post) => post.category !== "日报").slice(0, 4),
+  ].filter(Boolean);
+  for (const post of homepagePosts) {
     const relativePath = `article/${encodeURIComponent(post.id)}/`;
     assert.ok(home.includes(`href="${relativePath}"`), `${post.id}: homepage article link`);
     assert.equal(new URL(relativePath, `https://example.test${basePath}/`).pathname, `${basePath}/${relativePath}`);

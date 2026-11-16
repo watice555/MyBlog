@@ -50,7 +50,7 @@ export function useArticleSearch(articles: readonly ArticleMetadata[]) {
   }, []);
   const searchStatus = !keyword ? "idle" : index ? "ready" : failed ? "error" : "loading";
   const filteredArticles = useMemo(() => articles.filter((article) =>
-    (!selectedCategory || article.category === selectedCategory) &&
+    (selectedCategory ? article.category === selectedCategory : article.category !== "日报") &&
     (!keyword || Boolean(index?.get(article.id)?.includes(keyword))),
   ), [articles, selectedCategory, keyword, index]);
 

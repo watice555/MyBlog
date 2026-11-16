@@ -247,18 +247,26 @@ test("server-renders the finished blog", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
 
-test("features the newest article without repeating it in the recent list", async () => {
+test("features the latest daily and reserves recent articles for non-daily posts", async () => {
   const html = await render();
+  const metadata = await readFile(new URL("../app/generated-posts.ts", import.meta.url), "utf8");
+  const posts = JSON.parse(metadata.slice(metadata.indexOf("["), metadata.lastIndexOf("]") + 1));
+  const latestDaily = posts.find((post) => post.category === "日报");
+  const nonDaily = posts.filter((post) => post.category !== "日报");
   const featured = html.match(/<article class="featured-article"[\s\S]*?<\/article>/)?.[0];
   const recent = html.match(/<section class="home-recent"[\s\S]*?<\/section>/)?.[0];
-  assert.ok(featured, "the latest article is rendered in the introduction");
+  assert.ok(featured, "the latest daily is rendered in the introduction");
   assert.ok(recent, "the recent list is rendered below the introduction");
+  assert.match(featured, /最新日报/);
+  assert.ok(featured.includes(`href="article/${encodeURIComponent(latestDaily.id)}/"`));
   assert.match(html, /href="#recent"/);
   assert.match(recent, /id="recent"/);
   const href = featured.match(/href="([^"]+)"/)?.[1];
   assert.ok(href?.startsWith("article/"), "article links stay relative to the site path");
   assert.ok(!recent.includes(`href="${href}"`), "the featured article is not listed twice");
-  assert.equal((recent.match(/<article /g) || []).length, 4);
+  const recentLinks = [...recent.matchAll(/<h3><a href="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(recentLinks, nonDaily.slice(0, 4).map((post) => `article/${encodeURIComponent(post.id)}/`));
+  assert.ok(recent.replaceAll("<!-- -->", "").includes(`全部 ${nonDaily.length} 篇`));
   assert.doesNotMatch(html, /本地布局预览|首页布局对比|home-note/);
 });
 

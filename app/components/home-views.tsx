@@ -33,7 +33,8 @@ const EXTERNAL_PROJECTS = [
 
 
 export function HomeView({ articles }: { articles: readonly ArticleMetadata[] }) {
-  const latest = articles[0];
+  const latest = articles.find((article) => article.category === "日报");
+  const recentArticles = articles.filter((article) => article.category !== "日报");
   return <>
     <section className="home-hero" aria-labelledby="hero-title">
       <div className="home-intro">
@@ -43,7 +44,7 @@ export function HomeView({ articles }: { articles: readonly ArticleMetadata[] })
         <a className="primary-link" href="#recent">开始阅读 <span aria-hidden="true">↓</span></a>
       </div>
       {latest && <article className="featured-article" aria-labelledby="featured-title">
-        <p className="featured-label"><span />最新文章 <span className="featured-en">LATEST ENTRY</span></p>
+        <p className="featured-label"><span />最新日报 <span className="featured-en">LATEST DAILY</span></p>
         <div className="featured-meta"><span>{latest.category}</span><time dateTime={latest.dateISO}>{latest.date}</time></div>
         <h2 id="featured-title"><a href={articlePath(latest.id)}>{latest.title}</a></h2>
         <p className="featured-excerpt">{latest.excerpt}</p>
@@ -54,10 +55,10 @@ export function HomeView({ articles }: { articles: readonly ArticleMetadata[] })
     <section className="home-recent" id="recent" aria-labelledby="recent-title">
       <div className="home-section-heading">
         <div><h2 id="recent-title">最近文章</h2><span className="section-kicker">RECENT ARTICLES</span></div>
-        <a href="#archive">全部 {articles.length} 篇 <span aria-hidden="true">↗</span></a>
+        <a href="#archive">全部 {recentArticles.length} 篇 <span aria-hidden="true">↗</span></a>
       </div>
       <div className="article-list">
-        {articles.slice(1, 5).map((article, index) => <article className="home-row" key={article.id}>
+        {recentArticles.slice(0, 4).map((article, index) => <article className="home-row" key={article.id}>
           <span className="article-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
           <div className="article-body">
             <div className="article-overline"><span>{article.category}</span><time dateTime={article.dateISO}>{article.date}</time><AiParticipationIndicator value={article.aiParticipation} variant="dots" /></div>
@@ -154,7 +155,7 @@ return (
                     aria-pressed={!selectedCategory}
                     onClick={() => setSelectedCategory("")}
                   >
-                    全部
+                    全部（不含日报）
                   </button>
                   {categories.map((category) => (
                     <button
