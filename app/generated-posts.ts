@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-11-17-合并日报",
+    "title": "2026-11-17 合并日报",
+    "excerpt": "英伟达治理危机引发市场动荡，Anthropic IPO临近，BTC情绪极度恐惧，美国收紧AI芯片出口，微软宕机致巨额损失，多起加密安全事件频发，A股科技股暴跌，需关注财报、IPO定价及支撑位。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.11.17",
+    "dateISO": "2026-11-17",
+    "wordCount": 4687,
+    "readTime": "12 分钟"
+  },
+  {
     "id": "2026-11-16-合并日报",
     "title": "2026-11-16 合并日报",
     "excerpt": "2026年11月16日，英伟达管理层动荡与财报前夕引发关注，BTC跌破6.2万美元致加密市场深度回调。美国收紧AI芯片出口管制，中国10月经济数据放缓。Lighter协议遭攻击，Anthropic IPO临近分流资金，市场风险偏好显著降低。",
