@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "ai真正颠覆的不是岗位而是组织",
+    "title": "AI 真正颠覆的不是岗位，而是组织",
+    "excerpt": "读《Organizing Intelligence》：AI 单体能力再强，也未必打得过人类组织；真正可能引发经济剧变的，是 AI 的协调能力突破“科斯天花板”的那一刻。",
+    "category": "论文阅读",
+    "aiParticipation": 4,
+    "date": "2026.11.18",
+    "dateISO": "2026-11-18",
+    "wordCount": 3595,
+    "readTime": "9 分钟"
+  },
+  {
     "id": "2026-11-17-合并日报",
     "title": "2026-11-17 合并日报",
     "excerpt": "英伟达治理危机引发市场动荡，Anthropic IPO临近，BTC情绪极度恐惧，美国收紧AI芯片出口，微软宕机致巨额损失，多起加密安全事件频发，A股科技股暴跌，需关注财报、IPO定价及支撑位。",
