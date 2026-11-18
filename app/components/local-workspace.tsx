@@ -253,10 +253,7 @@ export default function LocalWorkspace() {
                 <textarea
                   ref={markdownTextareaRef}
                   value={draft.content}
-                  onChange={(event) => {
-                    setDraft({ ...draft, content: event.target.value });
-                    setProofreadingSuggestions("");
-                  }}
+                  onChange={(event) => setDraft({ ...draft, content: event.target.value })}
                   placeholder={"# 文章标题\n\n从这里开始写下今天的想法……"}
                   aria-label="Markdown 正文"
                   spellCheck="true"

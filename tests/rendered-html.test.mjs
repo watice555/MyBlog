@@ -1081,6 +1081,7 @@ test("keeps local AI writing tools author-oriented and suggestion-only", async (
   assert.match(page, /localAiEnabled && \(/);
   assert.match(page, /AI 检查语病与错别字/);
   assert.match(page, /setProofreadingSuggestions\(result\.suggestions\)/);
+  assert.match(page, /ref=\{markdownTextareaRef\}\s*value=\{draft\.content\}\s*onChange=\{\(event\) => setDraft\(\{ \.\.\.draft, content: event\.target\.value \}\)\}/);
   assert.match(page, /检查结果仅供参考，不会自动改动正文/);
   assert.match(page, /本机文字助手服务未启动，请重启 npm run dev/);
   assert.match(viteConfig, /createLocalLlmPlugin from "\.\/build\/local-llm-plugin\.mjs"/);

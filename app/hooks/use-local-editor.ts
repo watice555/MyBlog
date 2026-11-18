@@ -243,6 +243,8 @@ export function useLocalEditor() {
   const loadDraftIntoEditor = useCallback((nextDraft: Draft) => {
     nextDraft = { ...nextDraft, title: parseMarkdownTitle(nextDraft.content).title };
     editorSessionRef.current += 1;
+    setProofreading(false);
+    setProofreadingSuggestions("");
     const signature = draftSignature(nextDraft);
     draftRef.current = nextDraft;
     autosaveBaselineRef.current = signature;
@@ -436,7 +438,6 @@ export function useLocalEditor() {
 
     loadDraftIntoEditor(draftFromDraftArticle(savedDraft));
     autosavePausedRef.current = false;
-    setProofreadingSuggestions("");
     window.location.assign(`#editor/draft/${encodeURIComponent(savedDraft.id)}`);
   };
 
@@ -446,7 +447,6 @@ export function useLocalEditor() {
     if (hasDraft && !await clearRecoveryBeforeReplacement()) return;
     loadDraftIntoEditor({ ...emptyDraft });
     autosavePausedRef.current = false;
-    setProofreadingSuggestions("");
     window.location.assign("#editor");
   };
 
@@ -499,17 +499,20 @@ export function useLocalEditor() {
       return;
     }
 
+    const targetSession = editorSessionRef.current;
     setProofreading(true);
-    setProofreadingSuggestions("");
     try {
       const result = await requestLocalAi("proofread");
+      if (editorSessionRef.current !== targetSession) return;
       if (!result.suggestions) throw new Error("本机模型没有返回检查建议");
       setProofreadingSuggestions(result.suggestions);
       notify(`${result.provider || "本机模型"} 已完成文字检查`);
     } catch (error) {
-      notify(error instanceof Error ? error.message : "文字检查失败");
+      if (editorSessionRef.current === targetSession) {
+        notify(error instanceof Error ? error.message : "文字检查失败");
+      }
     } finally {
-      setProofreading(false);
+      if (editorSessionRef.current === targetSession) setProofreading(false);
     }
   };
 
