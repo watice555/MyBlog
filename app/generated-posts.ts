@@ -1,6 +1,17 @@
 // 此文件由 scripts/generate-posts.mjs 自动生成，请勿手动修改。
 export const generatedPosts = [
   {
+    "id": "2026-11-20-合并日报",
+    "title": "2026-11-20 合并日报",
+    "excerpt": "Anthropic上市引发全球资产剧烈波动，美联储鹰派信号压制风险偏好，BTC跌破六万美元。A股小微盘遭遇流动性危机，半导体板块受监管与做空冲击，Sky协议爆发信任挤兑，市场风险偏好急剧下降。",
+    "category": "日报",
+    "aiParticipation": 5,
+    "date": "2026.11.20",
+    "dateISO": "2026-11-20",
+    "wordCount": 3619,
+    "readTime": "10 分钟"
+  },
+  {
     "id": "2026-11-19-合并日报",
     "title": "2026-11-19 合并日报",
     "excerpt": "2026年11月19日，Anthropic创纪录IPO与美联储转鹰致BTC跌破6.3万美元，英伟达动荡及NGINX高危漏洞引发市场担忧。A股缩量探底，AI产业竞争加剧，链上安全事件频发，需警惕流动性风险与监管动态。",
