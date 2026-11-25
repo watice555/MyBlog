@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import ReactMarkdown from "react-markdown";
 import { parseFrontMatter } from "../lib/front-matter.mjs";
+import { remarkFormattingPlugins } from "../lib/markdown-formatting.mjs";
 import { parseMarkdownTitle } from "../lib/markdown-title.mjs";
 import createLocalLlmPlugin from "../build/local-llm-plugin.mjs";
 import createLocalPostsPlugin from "../build/local-posts-plugin.mjs";
@@ -286,6 +290,26 @@ test("ships GitHub Pages and social metadata", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
 
+test("renders CJK punctuation inside emphasis next to unspaced text", () => {
+  const source = [
+    "前文。**恐怕还早。**于是，**「继续」**推进。",
+    "下一步*可以吗？*可以。",
+    "`**句号。**后面` 与 \\*\\*字面星号。\\*\\*仍保留。",
+    "```md\n**句号。**后面\n```",
+    "~~**可以吗？**可以~~",
+    "**English.**word and **English.** Word",
+  ].join("\n\n");
+  const html = renderToStaticMarkup(createElement(ReactMarkdown, { remarkPlugins: remarkFormattingPlugins }, source));
+
+  assert.match(html, /<p>前文。<strong>恐怕还早。<\/strong>于是，<strong>「继续」<\/strong>推进。<\/p>/);
+  assert.match(html, /<p>下一步<em>可以吗？<\/em>可以。<\/p>/);
+  assert.match(html, /<code>\*\*句号。\*\*后面<\/code> 与 \*\*字面星号。\*\*仍保留。/);
+  assert.match(html, /<pre><code class="language-md">\*\*句号。\*\*后面\n<\/code><\/pre>/);
+  assert.match(html, /<del><strong>可以吗？<\/strong>可以<\/del>/);
+  assert.match(html, /<p>\*\*English\.\*\*word and <strong>English\.<\/strong> Word<\/p>/);
+  assert.equal(parseMarkdownTitle("# **标题。**续篇\n\n正文").title, "标题。续篇");
+});
+
 test("renders GFM tables and mathematical formulas with responsive styles", async () => {
   const [page, layout, styles, packageJson] = await Promise.all([
     readUiSource(),
@@ -295,10 +319,9 @@ test("renders GFM tables and mathematical formulas with responsive styles", asyn
   ]);
 
   assert.match(page, /import ReactMarkdown.*from "react-markdown"/);
-  assert.match(page, /import remarkGfm from "remark-gfm"/);
   assert.match(page, /import remarkMath from "remark-math"/);
   assert.match(page, /import rehypeKatex from "rehype-katex"/);
-  assert.match(page, /const remarkPlugins = \[remarkGfm, remarkMath\]/);
+  assert.match(page, /const remarkPlugins = \[\.\.\.remarkFormattingPlugins, remarkMath\]/);
   assert.match(page, /trust: false/);
   assert.match(page, /normalizeMathDelimiters\(source\)/);
   assert.match(page, /\[A-Z\]\[A-Z0-9\]\{1,\}/);

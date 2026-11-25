@@ -1,12 +1,12 @@
 import { memo } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
-import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import type { PluggableList } from "unified";
+import { remarkFormattingPlugins } from "../../lib/markdown-formatting.mjs";
 import { resolvePostUrl } from "../../lib/site";
 
-const remarkPlugins = [remarkGfm, remarkMath];
+const remarkPlugins = [...remarkFormattingPlugins, remarkMath];
 const rehypePlugins: PluggableList = [[rehypeKatex, { trust: false }]];
 const components: Components = {
   table: ({ children, ...props }) => <div className="table-scroll"><table {...props}>{children}</table></div>,
